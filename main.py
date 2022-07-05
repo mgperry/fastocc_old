@@ -1,7 +1,10 @@
-from bed import read_bed, bin_range
 import argparse
 import pysam
-from occupancy import calc_occ_bins, get_binned_reads, smooth
+import sys
+from pybedtools import BedTool
+
+from bed import Range
+from occupancy import occupancy
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--bed", help="BED file containing ranges")
@@ -10,21 +13,17 @@ parser.add_argument("--bam", help="BAM file containing ATAC-seq reads")
 if __name__=="__main__":
     args = parser.parse_args()
 
-    ranges = read_bed(args.bed)
+    # generate sorted, extended and merged bed w/ hacked 1-based coords
+    temp_bed = BedTool(args.bed).sort().slop(l=499, r=500, genome="hg38").merge(d=100)
+    # read in the resulting intervals and align to 10bp bins
+    ranges = [Range(*i).align() for i in temp_bed]
 
-    bam_file = pysam.AlignmentFile(args.bam)
+    bam = pysam.AlignmentFile(args.bam)
 
     for r in ranges:
-        # extend region and align to grid
-        r1, binned_reads = get_binned_reads(bam_file, r)
-        binned_occ = calc_occ_bins(binned_reads, 12)
-        smooth_occ = smooth(binned_occ)
+        occ = occupancy(bam, r)
         
-        for i, r_bin in enumerate(bin_range(r1)):
-            try:
-                r_bin.score = smooth_occ[i]
-                print(r_bin)
-            except:
-                break # this is just because i can't count
-
+        for i, b in enumerate(r.bin()):
+            b.score = occ[i]
+            print(b.bed_graph())
 
