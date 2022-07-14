@@ -3,7 +3,7 @@ import pysam
 from pybedtools import BedTool
 import numpy as np
 
-from bed import Range
+from range import Range
 from occupancy import bin_and_split_reads, occupancy, smooth
 
 parser = argparse.ArgumentParser()
@@ -15,6 +15,9 @@ parser.add_argument("--pseudocount", help="Pseudocount added to NUC reads (numbe
 if __name__=="__main__":
     args = parser.parse_args()
 
+    if not args.pseudocount > 0:
+        args.pseudocount = 0.001 # avoid potential div by zero errors
+
     # generate sorted, extended and merged bed w/ hacked 1-based coords
     temp_bed = BedTool(args.bed).sort().slop(l=499, r=500, genome="hg38").merge(d=200)
 
@@ -23,28 +26,25 @@ if __name__=="__main__":
 
     bam = pysam.AlignmentFile(args.bam)
 
-    for r in ranges:
+    nbin = 11
 
-        nbin = 11
+    # print column headings
+    print("\t".join(["chr", "start", "end", "nfr", "nuc", "window", "smooth"]))
+
+    for r in ranges:
 
         r_ext = r.extend((nbin-1)*10)
 
         nfr, nuc = bin_and_split_reads(bam, r_ext)
 
-        nuc = nuc + args.pseudocount 
-
-        window_occ = occupancy(nfr, nuc)
+        window_occ = occupancy(nfr, nuc + args.pseudocount)
 
         smooth_occ = smooth(window_occ)
-
-        scores = np.vstack((
-            nfr,
-            nuc,
-            np.pad(window_occ, 5),
-            np.pad(smooth_occ, 10)
-        ))
+        
+        window_occ = np.pad(window_occ, 5)
+        smooth_occ = np.pad(smooth_occ, 10)
         
         for i, bin in enumerate(r_ext.make_bins()):
-            cols = "%d\t%d\t%0.2f\t%0.2f" % tuple(scores[:,i])
-            print(f"{bin.chr}\t{bin.start-1}\t{bin.end}\t" + cols)
+            row = (bin.chr, bin.start-1, bin.end, nfr[i], nuc[i], window_occ[i], smooth_occ[i])
+            print("%s\t%d\t%d\t%d\t%d\t%0.2f\t%0.2f" % row)
 

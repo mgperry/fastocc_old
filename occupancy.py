@@ -1,33 +1,16 @@
 import numpy as np
 import pysam
-from bed import Range
-import scipy.signal as signal
-
-def run_occupancy(b: pysam.AlignmentFile, r: Range, max_ilen=1000, window=120, pc=1):
-    """
-    Helper function to get reads, calculated windowed + binned occupancy and smooth
-    the result. It also wraps the windowing necessary to do this accurately so nothing
-    else needs to know about this.
-    """
-
-    nbin = 11
-
-    r_ext = r.extend((nbin-1)*10)
-    nfr, nuc = bin_and_split_reads(b, r_ext, max_ilen)
-
-    nuc = nuc + pc
-
-    binned_occ = occupancy(nfr, nuc, nbin, pc)
-
-    return smooth(binned_occ)
+from range import Range
 
 
-def bin_and_split_reads(bam: pysam.AlignmentFile, r: Range, max_ilen=1000):
+def bin_and_split_reads(bam: pysam.AlignmentFile, r: Range):
     """
     Read ATAC-seq fragments into a matrix of 10bp bins.
     """
 
-    q = r.extend(max_ilen) # this is to capture long fragments
+    max_ilen = 1000
+
+    q = r.extend(max_ilen//2) # this is to capture long fragments
 
     nfr = np.zeros(len(r)//10, dtype=int)
     nuc = np.zeros(len(r)//10, dtype=int)
@@ -55,22 +38,31 @@ def bin_and_split_reads(bam: pysam.AlignmentFile, r: Range, max_ilen=1000):
 
 
 def occupancy(nfr, nuc):
-    # fancy indexing into 1D arrays
+    # create matrix representing 11-bin windows into counts
     index = np.arange(11)[None, :] + np.arange(nfr.shape[0] - 10)[:, None]
-    sum_nfr = np.sum(nfr[index], 1)
-    sum_nuc = np.sum(nuc[index], 1)
-    occ = (sum_nfr * 1.22) / (sum_nuc + sum_nfr)
-    return occ.clip(max=1)
 
-GAUSS = np.array([0.04393693, 0.13533528, 0.32465247, 0.60653066, 0.8824969, 1., 0.8824969 , 0.60653066, 0.32465247, 0.13533528, 0.04393693]) # signal.gaussian(11, 2)
+    nfr_window_sums = np.sum(nfr[index], 1)
+    nuc_window_sums = np.sum(nuc[index], 1)
+
+    # super secret occupancy formula
+    occ = (nfr_window_sums * 1.22) / (nfr_window_sums + nuc_window_sums)
+
+    return occ.clip(max=1) # corrected values can't exceed 1
+
+
+# scipy.signal.gaussian(11, 2)
+GAUSS = np.array([0.04393693, 0.13533528, 0.32465247, 0.60653066, 0.8824969, 1., 0.8824969 , 0.60653066, 0.32465247, 0.13533528, 0.04393693])
+
+# np.convolve(GAUSS, np.ones(11), mode='valid')
+GAUSS_NORM = 4.98590449
 
 def smooth(x):
     """
-    smoothes input signal using gaussian window, hardcoded as 
-    `scipy.signal.gaussian(11, 2)`. NaNs in x will result in errors.
+    smoothes input signal using hardcoded gaussian function (see source). NaNs in x will result in errors.
+
+    Output is normalised using a hardcoded constant derived from convolving the kernel with a vector of 1s.
     """
     
     smoothed = np.convolve(GAUSS, x, mode = 'valid')
-    norm = np.convolve(GAUSS, np.ones(len(x)), mode = 'valid')
 
-    return smoothed / norm
+    return smoothed / GAUSS_NORM
