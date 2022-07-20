@@ -1,6 +1,3 @@
-from dataclasses import dataclass
-
-@dataclass
 class Range:
     """
     Class representing a genomic range or interval.
@@ -8,24 +5,30 @@ class Range:
     NB this uses "GRanges" style inclusive ranges, not BED-style insanity.
     """
 
-    chr: str
-    start: int
-    end: int
-    name: str = "."
-    score: float = 0
-    strand: str = "."
-
-    def __post_init__(self):
-        # convert from string tuple if needed ie. during import
-        self.start = int(self.start)
-        self.end = int(self.end)
-        self.score = float(self.score)
+    def __init__(
+        self,
+        chr: str,
+        start: int,
+        end: int,
+        name: str = ".",
+        score: float = 0,
+        strand: str = ".",
+    ):
+        # explicit init with coercion for easier BED-file reading
+        self.chr = chr
+        self.start = int(start)
+        self.end = int(end)
+        self.name = name
+        self.score = float(score)
+        self.strand = strand
 
     def extend(self, bp: int):
         """
         Return a range extended by *bp* on either end.
         """
-        return Range(self.chr, self.start - bp, self.end + bp, self.name, self.score, self.strand)
+        return Range(
+            self.chr, self.start - bp, self.end + bp, self.name, self.score, self.strand
+        )
 
     def align(self):
         """
@@ -43,7 +46,10 @@ class Range:
         """
         r = self.align()
         starts = range(r.start, r.end, 10)
-        return [Range(self.chr, s, s+9, self.name, self.score, self.strand) for s in starts]
+        return [
+            Range(self.chr, s, s + 9, self.name, self.score, self.strand)
+            for s in starts
+        ]
 
     def __len__(self):
         """
@@ -51,4 +57,3 @@ class Range:
         GRanges, so an interval "chr1:25-25" has length 1.
         """
         return self.end - self.start + 1
-
