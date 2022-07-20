@@ -1,7 +1,8 @@
 import argparse
+import numpy as np
+
 import pysam
 from pybedtools import BedTool
-import numpy as np
 
 from range import Range
 from occupancy import bin_and_split_reads, occupancy, smooth
