@@ -6,6 +6,8 @@ from pybedtools import BedTool
 from fastocc.range import Range
 from fastocc.occupancy import bin_and_split_reads, occupancy, smooth
 from fastocc.options import Options
+from fastocc.pysam_util import fetch_chrom_sizes
+
 
 @click.command()
 @click.option("--bam", help="BAM file containing ATAC-seq reads", required=True, type=str)
@@ -15,13 +17,16 @@ def cli(bam: str, bed: str=None, pseudocount: float=1, raw: bool=False):
     if not pseudocount > 0:
         pseudocount = 0.001 # avoid potential div by zero errors
 
+    b = pysam.AlignmentFile(bam)
+
+    # extract chrom sizes from bam header into pybedtools format
+    chrom_sizes = fetch_chrom_sizes(b.header)
+
     # generate sorted, extended and merged bed w/ hacked 1-based coords
     if bed:
-        intervals = BedTool(bed).sort().slop(l=Options.extend-1, r=Options.extend, genome="hg38").merge(d=Options.merge)
+        intervals = BedTool(bed).sort().slop(l=Options.extend-1, r=Options.extend, g=chrom_sizes).merge(d=Options.merge)
     else:
-        intervals = BedTool().window_maker(genome="hg38", w=1000).slop(l=-1, r=0, genome="hg38")
-
-    b = pysam.AlignmentFile(bam)
+        intervals = BedTool().window_maker(g=chrom_sizes, w=1000).slop(l=-1, r=0, g=chrom_sizes)
 
     # print column headings
     print("\t".join(["chr", "start", "end", "nfr", "nuc", "window", "smooth"]))
