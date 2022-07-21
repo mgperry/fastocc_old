@@ -24,10 +24,14 @@ class Range:
 
     def extend(self, bp: int):
         """
-        Return a range extended by *bp* on either end.
+        Return a range extended by *bp* on either end. Does not check bounds.
         """
+
+        start = self.start - bp
+        end = self.end + bp
+
         return Range(
-            self.chr, self.start - bp, self.end + bp, self.name, self.score, self.strand
+            self.chr, start, end, self.name, self.score, self.strand
         )
 
     def align(self):
@@ -36,9 +40,9 @@ class Range:
 
         e.g. chr2:54-89 => chr2:51-90
         """
-        s = (self.start - 1) // 10 * 10 + 1
-        e = (self.end - 1) // 10 * 10 + 10
-        return Range(self.chr, s, e, self.name, self.score, self.strand)
+        start = (self.start - 1) // 10 * 10 + 1
+        end = (self.end - 1) // 10 * 10 + 10
+        return Range(self.chr, start, end, self.name, self.score, self.strand)
 
     def make_bins(self):
         """
