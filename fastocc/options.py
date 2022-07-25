@@ -3,7 +3,9 @@ import numpy as np
 class Options:
     """
     These aren't meant to be changed after release (or by users), but instead to avoid
-    magic numbers and allow us to test alternatives if needed.
+    magic numbers and allow us to test alternatives if needed. Be aware that as it stands
+    changing these numbers is untested, there may be subtle bugs (particularly around
+    windowing calculations).
     """
     bins = 11 # number of bins for window estimation
     bin_width = 10 # width of bins

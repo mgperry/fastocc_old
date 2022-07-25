@@ -154,10 +154,18 @@ category = "dev"
 optional = false
 python-versions = ">=3.7"
 
+[[package]]
+name = "typing-extensions"
+version = "4.3.0"
+description = "Backported and Experimental Type Hints for Python 3.7+"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "37e1e24c95f173671d3d702c6b977b469a8ad1316847622e4558b463d0ec53df"
+content-hash = "2067dddea79e074416bfb4f6ee6a26ffc2ba836533926468edf603366a732c77"
 
 [metadata.files]
 atomicwrites = []
@@ -178,3 +186,4 @@ six = [
     {file = "six-1.16.0.tar.gz", hash = "sha256:1e61c37477a1626458e36f7b1d82aa5c9b094fa4802892072e49de9c60c4c926"},
 ]
 tomli = []
+typing-extensions = []
