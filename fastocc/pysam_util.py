@@ -14,8 +14,7 @@ def fetch_chrom_sizes(h: pysam.AlignmentHeader) -> dict[str, tuple[int, int]]:
     Extract chromosome sizes from BAM header (via pysam) into the format expected by
     pybedtools.
 
-    header.to_dict() => {"SQ": [{"SN": "chr1", "LN", 248956422}, ...], ...}
-    output => {"chr1": (1, 248956422), ...}
+    h["SQ"] => [{"SN": "chr1", "LN", 248956422}, ...]
+    output => {"chr1": (0, 248956422), ...}
     """
-    SQ = h.to_dict()['SQ']
-    return {seq["SN"]: (0, seq["LN"]) for seq in SQ}
+    return {seq["SN"]: (0, seq["LN"]) for seq in h['SQ']}

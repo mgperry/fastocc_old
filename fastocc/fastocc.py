@@ -19,7 +19,6 @@ def cli(bam: str, bed: str=None, pseudocount: float=1):
 
     b = pysam.AlignmentFile(bam)
 
-    # extract chrom sizes from bam header into pybedtools format
     chrom_sizes = fetch_chrom_sizes(b.header)
 
     if bed:
@@ -27,7 +26,7 @@ def cli(bam: str, bed: str=None, pseudocount: float=1):
     else:
         intervals = BedTool().window_maker(g=chrom_sizes, w=1000)
 
-    # print column headings
+    # column headings
     print("\t".join(["chr", "start", "end", "nfr", "nuc", "window", "smooth"]))
 
     shift = Options.bins // 2
@@ -35,11 +34,11 @@ def cli(bam: str, bed: str=None, pseudocount: float=1):
     for i in intervals:
         r = interval_to_range(i).align()
 
-        nfr, nuc = bin_and_split_reads(b, r.extend((Options.bins-1)*Options.bin_width))
+        nfr, nuc = bin_and_split_reads(b, r.extend(2*shift*Options.bin_size))
         window_occ = occupancy(nfr, nuc + pseudocount)
         smooth_occ = smooth(window_occ)
 
-        for i, bin in enumerate(r.make_bins()):
-            row = (bin.chr, bin.start-1, bin.end, nfr[i+shift*2], nuc[i+shift*2], window_occ[i+shift], smooth_occ[i])
+        for j, bin in enumerate(r.make_bins()):
+            row = (bin.chr, bin.start-1, bin.end, nfr[j+shift*2], nuc[j+shift*2], window_occ[j+shift], smooth_occ[j])
             print("%s\t%d\t%d\t%d\t%d\t%0.2f\t%0.2f" % row)
 

@@ -1,5 +1,6 @@
 import numpy as np
 import pysam
+
 from fastocc.range import Range
 from fastocc.options import Options
 from fastocc.pysam_util import fetch_safe
@@ -14,7 +15,7 @@ def bin_and_split_reads(bam: pysam.AlignmentFile, r: Range):
 
     q = r.extend(Options.max_insert//2) # this is to capture long fragments
 
-    n_bins = len(r) // Options.bin_width
+    n_bins = len(r) // Options.bin_size
 
     nfr = np.zeros(n_bins)
     nuc = np.zeros(n_bins)
@@ -29,12 +30,12 @@ def bin_and_split_reads(bam: pysam.AlignmentFile, r: Range):
             if fragment_size > Options.max_insert:
                 continue
             
-            midpoint = left_insertion + (fragment_size-1) // 2
+            midpoint = (left_insertion + fragment_size - 1) // 2
             
-            bin = (midpoint - r.start + 1) // Options.bin_width
+            bin = (midpoint - r.start + 1) // Options.bin_size
             
             if bin >= 0 and bin < n_bins:
-                if fragment_size <= 120:
+                if fragment_size <= Options.nfr_cutoff:
                     nfr[bin] += 1
                 else:
                     nuc[bin] += 1
@@ -61,7 +62,7 @@ def occupancy(nfr: np.array, nuc: np.array):
     nuc_window_sums = np.sum(nuc[index], 1)
 
     # super secret occupancy formula
-    occ = (nfr_window_sums * 1.22) / (nfr_window_sums + nuc_window_sums)
+    occ = (nfr_window_sums * Options.nfr_ratio) / (nfr_window_sums + nuc_window_sums)
 
     # corrected values can't exceed 1
     return occ.clip(max=1)
