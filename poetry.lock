@@ -99,6 +99,17 @@ pysam = "*"
 six = "*"
 
 [[package]]
+name = "pybigwig"
+version = "0.3.18"
+description = "A package for accessing bigWig files using libBigWig"
+category = "main"
+optional = false
+python-versions = "*"
+
+[package.extras]
+"numpy input" = ["numpy"]
+
+[[package]]
 name = "pyparsing"
 version = "3.0.9"
 description = "pyparsing module - Classes and methods to define and execute parsing grammars"
@@ -165,7 +176,7 @@ python-versions = ">=3.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "2067dddea79e074416bfb4f6ee6a26ffc2ba836533926468edf603366a732c77"
+content-hash = "0ba4e5fb75c793bc83165421119658f4c6fadf41090424201803876061980448"
 
 [metadata.files]
 atomicwrites = []
@@ -178,6 +189,7 @@ packaging = []
 pluggy = []
 py = []
 pybedtools = []
+pybigwig = []
 pyparsing = []
 pysam = []
 pytest = []
