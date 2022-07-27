@@ -30,7 +30,7 @@ def bin_and_split_reads(bam: pysam.AlignmentFile, r: Range):
             if fragment_size > Options.max_insert:
                 continue
             
-            midpoint = (left_insertion + fragment_size - 1) // 2
+            midpoint = left_insertion + (fragment_size - 1) // 2
             
             bin = (midpoint - r.start + 1) // Options.bin_size
             
