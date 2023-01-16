@@ -24,8 +24,9 @@ def cli(bam: str, bed: str=None, bigwig: str="", pseudocount: float=1):
     chrom_sizes = fetch_chrom_sizes(b.header)
 
     if bed:
-        intervals = BedTool(bed).slop(l=Options.extend, r=Options.extend, g=chrom_sizes).merge(d=Options.merge)
+        intervals = BedTool(bed).slop(l=Options.extend, r=Options.extend, g=chrom_sizes).sort(g=chrom_sizes).merge(d=Options.merge)
     else:
+        # TODO test to see if this creates missign edges, may have to extend by half bin width
         intervals = BedTool().window_maker(g=chrom_sizes, w=1000)
 
     # column headings
