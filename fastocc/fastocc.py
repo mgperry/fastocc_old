@@ -1,3 +1,5 @@
+import os
+
 import click
 
 import pysam
@@ -23,11 +25,19 @@ def cli(bam: str, bed: str=None, bigwig: str="", pseudocount: float=1):
 
     chrom_sizes = fetch_chrom_sizes(b.header)
 
+    chroms = "chrom.sizes"
+
+    with open(chroms, 'w') as f:
+        for chr, l in chrom_sizes:
+            f.write(f"{chr}\t{l}\n")
+
     if bed:
-        intervals = BedTool(bed).slop(l=Options.extend, r=Options.extend, g=chrom_sizes).sort(g=chrom_sizes).merge(d=Options.merge)
+        intervals = BedTool(bed).slop(l=Options.extend, r=Options.extend, g=chroms).sort(g=chroms).merge(d=Options.merge)
     else:
         # TODO test to see if this creates missign edges, may have to extend by half bin width
-        intervals = BedTool().window_maker(g=chrom_sizes, w=1000)
+        intervals = BedTool().window_maker(g=chroms, w=1000)
+
+    os.unlink(chroms)
 
     # column headings
     if not bigwig:
@@ -35,7 +45,7 @@ def cli(bam: str, bed: str=None, bigwig: str="", pseudocount: float=1):
 
     if bigwig:
         bw = pyBigWig.open(bigwig, 'w')
-        bw.addHeader([(chr, end) for chr, (_, end) in chrom_sizes.items()]) # different format req'd
+        bw.addHeader(chrom_sizes) # different format req'd
 
     shift = Options.bins // 2
 
