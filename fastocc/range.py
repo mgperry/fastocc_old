@@ -72,5 +72,5 @@ def interval_to_range(i: pybedtools.Interval) -> Range:
     Convenience function to create Range from pybedtools.Interval. Assumes 0-based input
     (ie correct BED format).
     """
-    score = i.score if i.score is not "." else 0
+    score = i.score if i.score != "." else 0
     return Range(i.chrom, i.start+1, i.end, i.name, score, i.strand)
