@@ -1,4 +1,5 @@
 import os
+import sys
 
 import click
 
@@ -21,7 +22,12 @@ def cli(bam: str, bed: str=None, bigwig: str="", pseudocount: float=1):
     if not pseudocount > 0:
         pseudocount = 0.001 # avoid potential div by zero errors
 
-    b = pysam.AlignmentFile(bam)
+    b = pysam.AlignmentFile(bam) # could check for index here
+
+    if not b.has_index():
+        print("No BAM index found, indexing BAM file...", file=sys.stderr)
+        pysam.index(b.filename)
+        b = pysam.AlignmentFile(bam) # have to reload to get index
 
     chrom_sizes = fetch_chrom_sizes(b.header)
 
