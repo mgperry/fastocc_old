@@ -2,8 +2,6 @@ from dataclasses import dataclass, replace
 from typing_extensions import Self
 import pybedtools
 
-from fastocc.options import Options
-
 
 @dataclass(frozen=True)
 class Range:
@@ -20,8 +18,6 @@ class Range:
     score: float = 0
     strand: str = "."
 
-    bin_size: int = Options.bin_size
-
     def extend(self, bp: int) -> Self:
         """
         Return a range extended by *bp* on either end. Does not check bounds.
@@ -32,30 +28,30 @@ class Range:
 
         return replace(self, start=s, end=e)
 
-    def align(self) -> Self:
+    def align(self, bin_size: int) -> Self:
         """
         Return a window aligned to 10bp bins.
 
         e.g. chr2:54-89 => chr2:51-90
         """
 
-        s = (self.start - 1) // self.bin_size * self.bin_size + 1
-        e = (self.end - 1) // self.bin_size * self.bin_size + self.bin_size
+        s = (self.start - 1) // bin_size * bin_size + 1
+        e = (self.end - 1) // bin_size * bin_size + bin_size
 
         return replace(self, start=s, end=e)
 
-    def make_bins(self) -> list[Self]:
+    def make_bins(self, bin_size: int) -> list[Self]:
         """
         Return a list of Ranges representing bins.
 
         e.g. make_bins(chr2:54-84) => [Range(chr2, 51, 60), ..., Range(chr2, 81, 90)]
         """
 
-        r = self.align()
-        starts = range(r.start, r.end, self.bin_size)
+        r = self.align(bin_size)
+        starts = range(r.start, r.end, bin_size)
 
         return [
-            replace(self, start=s, end=s + self.bin_size - 1)
+            replace(self, start=s, end=s + bin_size - 1)
             for s in starts
         ]
 

@@ -56,7 +56,7 @@ def cli(bam: str, bed: str=None, bigwig: str="", pseudocount: float=1):
     shift = Options.bins // 2
 
     for i in intervals:
-        r = interval_to_range(i).align()
+        r = interval_to_range(i).align(Options.bin_size)
 
         nfr, nuc = bin_and_split_reads(b, r.extend(2*shift*Options.bin_size))
         window_occ = occupancy(nfr, nuc + pseudocount)
@@ -65,7 +65,7 @@ def cli(bam: str, bed: str=None, bigwig: str="", pseudocount: float=1):
         if bigwig:
             bw.addEntries(r.chr, r.start-1, values=smooth_occ.tolist(), span=Options.bin_size, step=Options.bin_size)
         else:
-            for j, bin in enumerate(r.make_bins()):
+            for j, bin in enumerate(r.make_bins(Options.bin_size)):
                 row = (bin.chr, bin.start-1, bin.end, nfr[j+shift*2], nuc[j+shift*2], window_occ[j+shift], smooth_occ[j])
                 print("%s\t%d\t%d\t%d\t%d\t%0.2f\t%0.2f" % row)
 

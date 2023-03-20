@@ -22,8 +22,4 @@ RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
 COPY . /code/
 
-# ARG BED_FILE
-# ARG BAM_FILE
-# ARG WIG_FILE
-
 ENTRYPOINT ["python", "-m", "fastocc"]
