@@ -44,6 +44,7 @@ class Range:
         """
         Return a list of Ranges representing bins.
 
+        NB These are aligned to a genomic 'grid' based on bin_size
         e.g. make_bins(chr2:54-84) => [Range(chr2, 51, 60), ..., Range(chr2, 81, 90)]
         """
 
@@ -51,7 +52,7 @@ class Range:
         starts = range(r.start, r.end, bin_size)
 
         return [
-            replace(self, start=s, end=s + bin_size - 1)
+            Range(self.chr, start=s, end=s + bin_size - 1)
             for s in starts
         ]
 
@@ -62,11 +63,11 @@ class Range:
         """
         return self.end - self.start + 1
 
-
-def interval_to_range(i: pybedtools.Interval) -> Range:
-    """
-    Convenience function to create Range from pybedtools.Interval. Assumes 0-based input
-    (ie correct BED format).
-    """
-    score = i.score if i.score != "." else 0
-    return Range(i.chrom, i.start+1, i.end, i.name, score, i.strand)
+    @classmethod
+    def from_interval(cls, i: pybedtools.Interval) -> Self:
+        """
+        Convenience function to create Range from pybedtools.Interval. Assumes 0-based input
+        (ie correct BED format).
+        """
+        score = i.score if i.score != "." else 0
+        return Range(i.chrom, i.start+1, i.end, i.name, score, i.strand)

@@ -1,11 +1,38 @@
 import numpy as np
 import pysam
+from collections import namedtuple
+from collections.abc import Iterable
 
 from fastocc.range import Range
 from fastocc.options import Options
 from fastocc.pysam_util import fetch_safe
 
-def bin_and_split_reads(bam: pysam.AlignmentFile, r: Range):
+
+Fragment = namedtuple("Fragment", ["start", "size"])
+
+
+def fetch_fragments(bam: pysam.AlignmentFile, r: Range) -> Iterable[Fragment]:
+    """
+    Reconstruct full-length ATAC-seq fragments from a bam file. Filters for the first
+    read of proper pairs, corrects the Tn5 insertion distance and returns the start and
+    length (size) of a fragment in a named tuple.
+    """
+    q = r.extend(Options.max_insert//2) # this is to capture long fragments
+
+    for read in fetch_safe(bam, q):
+        if read.is_proper_pair and not read.is_reverse:
+            #get left position
+            left_insertion = read.pos + 4
+            # insert size corrected by 8 base pairs to be insertion to insertion
+            fragment_size = read.template_length - 8
+
+            if fragment_size > Options.max_insert:
+                continue
+            
+            yield Fragment(left_insertion, fragment_size)
+
+
+def bin_and_split_reads(bam: pysam.AlignmentFile, r: Range) -> tuple[np.ndarray, np.ndarray]:
     """
     Read ATAC-seq fragments into a matrix of 10bp bins based on their midpoints, and
     classifies them based on insertion length (insertions less than 120 are 
@@ -13,37 +40,27 @@ def bin_and_split_reads(bam: pysam.AlignmentFile, r: Range):
     these are rare in any case).
     """
 
-    q = r.extend(Options.max_insert//2) # this is to capture long fragments
-
     n_bins = len(r) // Options.bin_size
 
     nfr = np.zeros(n_bins)
     nuc = np.zeros(n_bins)
 
-    for read in fetch_safe(bam, q):
-        if read.is_proper_pair and not read.is_reverse:
-            #get left position
-            left_insertion = read.pos + 4
-            # insert size corrected by 8 base pairs to be inserion to insertion
-            fragment_size = read.template_length - 8
+    for f in fetch_fragments(bam, r):           
 
-            if fragment_size > Options.max_insert:
-                continue
-            
-            midpoint = left_insertion + (fragment_size - 1) // 2
-            
-            bin = (midpoint - r.start + 1) // Options.bin_size
-            
-            if bin >= 0 and bin < n_bins:
-                if fragment_size <= Options.nfr_cutoff:
-                    nfr[bin] += 1
-                else:
-                    nuc[bin] += 1
+        midpoint = f.start + (f.size - 1) // 2
+        
+        bin = (midpoint - r.start + 1) // Options.bin_size
+        
+        if bin >= 0 and bin < n_bins:
+            if f.size <= Options.nfr_cutoff:
+                nfr[bin] += 1
+            else:
+                nuc[bin] += 1
 
     return nfr, nuc
 
 
-def occupancy(nfr: np.array, nuc: np.array):
+def raw_occ(nfr: np.ndarray, nuc: np.ndarray):
     """
     Calculates nucleosome occupancy from a vector of nucleosome-free and nucleosomal 
     reads, based on the formula (NFR*1.22) / (NFR + NUC). This is calculated for
@@ -68,7 +85,7 @@ def occupancy(nfr: np.array, nuc: np.array):
     return occ.clip(max=1)
 
 
-def smooth(x: np.array):
+def smooth(x: np.ndarray):
     """
     Smoothes input 1D numpy array using hardcoded gaussian convolution. Output is
     normalised using a hardcoded constant derived from convolving the kernel with a
@@ -79,3 +96,19 @@ def smooth(x: np.array):
     smoothed = np.convolve(Options.gaussian, x, mode = 'valid')
 
     return smoothed / Options.gaussian_norm
+
+
+def occupancy(r: Range, bam: pysam.AlignmentFile, pseudocount: int) -> dict[np.ndarray]:
+    shift = Options.bins // 2
+
+    # double shift for windowing and smoothing
+    nfr, nuc = bin_and_split_reads(bam, r.extend(2*shift*Options.bin_size))
+    occ = raw_occ(nfr, nuc + pseudocount)
+
+    return {
+        "nfr": nfr[2*shift:-2*shift],
+        "nuc": nuc[2*shift:-2*shift],
+        "window": occ[shift:-shift],
+        "smooth": smooth(occ)
+    }
+

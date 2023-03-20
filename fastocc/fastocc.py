@@ -1,71 +1,55 @@
-import os
 import sys
 
 import click
 
 import pysam
 from pybedtools import BedTool
-import pyBigWig
 
-from fastocc.range import interval_to_range
-from fastocc.occupancy import bin_and_split_reads, occupancy, smooth
+from fastocc.range import Range
+from fastocc.occupancy import occupancy
 from fastocc.options import Options
-from fastocc.pysam_util import fetch_chrom_sizes
+from fastocc.pysam_util import fetch_chrom_sizes, temp_chrom_info
+import fastocc.io as io
 
 
 @click.command()
 @click.option("--bam", help="BAM file containing ATAC-seq reads", required=True, type=str)
-@click.option("--bed", help="Sorted BED file containing ranges. If not supplied, calulate occupancy genome-wide.", type=str)
-@click.option("--bigwig", help="Output smooth occupancy to bigwig file.", type=str)
+@click.option("--bed", help="BED file containing ranges. If not supplied, calulate occupancy genome-wide.", type=str)
+@click.option("-o", "--output", help="Output file location (defaults to stdout).", type=str, default="-")
+@click.option("--format", help="Output file format.", type=click.Choice(["bedgraph", "bigwig"]), default="bedgraph")
 @click.option("--pseudocount", help="Pseudocount added to NUC reads (number is for each 10bp bin)", type=float, default=1)
-def cli(bam: str, bed: str=None, bigwig: str="", pseudocount: float=1):
+def cli(bam: str, bed: str, output: str, format: str, pseudocount: float):
     if not pseudocount > 0:
         pseudocount = 0.001 # avoid potential div by zero errors
 
-    b = pysam.AlignmentFile(bam) # could check for index here
+    if format == "bigwig" and output == "-":
+        raise click.UsageError("Output must be a file if output format is bigwig")
+
+    b = pysam.AlignmentFile(bam)
 
     if not b.has_index():
         print("No BAM index found, indexing BAM file...", file=sys.stderr)
         pysam.index(b.filename)
-        b = pysam.AlignmentFile(bam) # have to reload to get index
+        b = pysam.AlignmentFile(bam) # reload index
 
     chrom_sizes = fetch_chrom_sizes(b.header)
 
-    chroms = "chrom.sizes"
+    with temp_chrom_info(chrom_sizes) as genome:
 
-    with open(chroms, 'w') as f:
-        for chr, l in chrom_sizes:
-            f.write(f"{chr}\t{l}\n")
-
-    if bed:
-        intervals = BedTool(bed).slop(l=Options.extend, r=Options.extend, g=chroms).sort(g=chroms).merge(d=Options.merge)
-    else:
-        # TODO test to see if this creates missign edges, may have to extend by half bin width
-        intervals = BedTool().window_maker(g=chroms, w=1000)
-
-    os.unlink(chroms)
-
-    # column headings
-    if not bigwig:
-        print("\t".join(["chr", "start", "end", "nfr", "nuc", "window", "smooth"]))
-
-    if bigwig:
-        bw = pyBigWig.open(bigwig, 'w')
-        bw.addHeader(chrom_sizes) # different format req'd
-
-    shift = Options.bins // 2
-
-    for i in intervals:
-        r = interval_to_range(i).align(Options.bin_size)
-
-        nfr, nuc = bin_and_split_reads(b, r.extend(2*shift*Options.bin_size))
-        window_occ = occupancy(nfr, nuc + pseudocount)
-        smooth_occ = smooth(window_occ)
-
-        if bigwig:
-            bw.addEntries(r.chr, r.start-1, values=smooth_occ.tolist(), span=Options.bin_size, step=Options.bin_size)
+        if bed:
+            intervals = BedTool(bed).slop(l=Options.extend, r=Options.extend, g=genome).sort(g=genome).merge(d=Options.merge)
         else:
-            for j, bin in enumerate(r.make_bins(Options.bin_size)):
-                row = (bin.chr, bin.start-1, bin.end, nfr[j+shift*2], nuc[j+shift*2], window_occ[j+shift], smooth_occ[j])
-                print("%s\t%d\t%d\t%d\t%d\t%0.2f\t%0.2f" % row)
+            intervals = BedTool().window_maker(g=genome, w=10000).slop(l=Options.extend, r=Options.extend, g=genome)
+
+    ranges = (Range.from_interval(i).align(Options.bin_size) for i in intervals)
+
+    if format == "bigwig":
+        writer = io.BigWigWriter(output, header=chrom_sizes)
+    else:
+        writer = io.BedGraphWriter(output)
+    
+    for r in ranges:
+        occ = occupancy(r, b, pseudocount)
+        writer.write(r, occ)
+
 
