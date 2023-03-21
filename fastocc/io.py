@@ -1,13 +1,83 @@
-import pyBigWig
-from fastocc.range import Range
-from fastocc.options import Options
+import os
 import csv
 import sys
+from contextlib import contextmanager
+
 import numpy as np
+
+import pysam
+from pybedtools import BedTool
+import pyBigWig
+
+from fastocc.range import Range
+from fastocc.options import Options
+
+
+def fetch_safe(bam: pysam.AlignmentFile, r: Range):
+    """
+    Wraps pysam.AlignmentFile.fetch so it doesn't fail on out-of-bounds ranges.
+    """
+    max_len = bam.header.get_reference_length(r.chr)
+    return bam.fetch(r.chr, max(r.start, 1), min(r.end, max_len))
+
+
+def fetch_chrom_sizes(h: pysam.AlignmentHeader) -> list[tuple[str, int]]:
+    """
+    Extract chromosome sizes from BAM header (via pysam).
+
+    h["SQ"] => [{"SN": "chr1", "LN", 248956422}, ...]
+    output => [("chr1", 248956422), ...]
+    """
+    return [(seq["SN"], seq["LN"]) for seq in h['SQ']]
+
+
+def write_chrom_sizes(chrom_sizes: list[tuple[str, int]], f):
+    """
+    Write chromosome sizes to a file in UCSC format. Format is the same as
+    the output of `fetch_chrom_sizes`, ie [("chr1", 248956422), ...]
+    """
+    for chr, l in chrom_sizes:
+        f.write(f"{chr}\t{l}\n")
+
+
+@contextmanager
+def temp_chrom_info(chrs, fn=".chrom.info"):
+    """
+    Context manager which creates a temporary .chromInfo file for use by called CLI programs.
+    """
+    with open(fn, 'w') as tempfile:
+        write_chrom_sizes(chrs, tempfile)
+
+    yield fn
+
+    os.unlink(fn)
+
+
+def fix_bed(bed: BedTool, chrom_info: list[tuple[str, int]], extend=100, merge=100):
+    """
+    Wrapper to extend, sort and merge a bed file so it won't cause
+    problems writing output or leave annoying gaps in generated tracks.
+
+    Also handles the genome info required to get pybedtools to behave,
+    see PR#380
+    """
+    with temp_chrom_info(chrom_info) as genome:
+        return bed.slop(l=extend, r=extend, g=genome).sort(g=genome).merge(d=merge)
+
+
+def make_windows(chrom_info: list[tuple[str, int]], size=10000):
+    """
+    Wrap window_maker function to use chromsizes.
+
+    NB chromsizes are created in order, so no need to pipe into sort and so we
+    avoid PR#380
+    """
+    g = {chr: (0, end) for chr, end in chrom_info}
+    return BedTool().set_chromsizes(g).window_maker(w=size)
 
 
 class BigWigWriter:
-    def __init__(self, f, header):
+    def __init__(self, f: str, header: list[tuple[str, int]]):
          self.file = pyBigWig.open(f, 'w')
          self.file.addHeader(header)
 

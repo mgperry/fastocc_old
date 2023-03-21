@@ -1,5 +1,4 @@
 import sys
-
 import click
 
 import pysam
@@ -8,7 +7,6 @@ from pybedtools import BedTool
 from fastocc.range import Range
 from fastocc.occupancy import occupancy
 from fastocc.options import Options
-from fastocc.pysam_util import fetch_chrom_sizes, temp_chrom_info
 import fastocc.io as io
 
 
@@ -32,14 +30,12 @@ def cli(bam: str, bed: str, output: str, format: str, pseudocount: float):
         pysam.index(b.filename)
         b = pysam.AlignmentFile(bam) # reload index
 
-    chrom_sizes = fetch_chrom_sizes(b.header)
+    chrom_sizes = io.fetch_chrom_sizes(b.header)
 
-    with temp_chrom_info(chrom_sizes) as genome:
-
-        if bed:
-            intervals = BedTool(bed).slop(l=Options.extend, r=Options.extend, g=genome).sort(g=genome).merge(d=Options.merge)
-        else:
-            intervals = BedTool().window_maker(g=genome, w=10000).slop(l=Options.extend, r=Options.extend, g=genome)
+    if bed:
+        intervals = io.fix_bed(BedTool(bed), chrom_sizes, Options.extend, Options.merge)
+    else:
+        intervals = io.make_windows(chrom_sizes)
 
     ranges = (Range.from_interval(i).align(Options.bin_size) for i in intervals)
 

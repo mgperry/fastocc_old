@@ -5,7 +5,7 @@ from collections.abc import Iterable
 
 from fastocc.range import Range
 from fastocc.options import Options
-from fastocc.pysam_util import fetch_safe
+from fastocc.io import fetch_safe
 
 
 Fragment = namedtuple("Fragment", ["start", "size"])
