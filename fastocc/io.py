@@ -2,6 +2,7 @@ import os
 import csv
 import sys
 from contextlib import contextmanager
+from dataclasses import astuple
 
 import numpy as np
 
@@ -9,8 +10,8 @@ import pysam
 from pybedtools import BedTool
 import pyBigWig
 
-from fastocc.range import Range
-from fastocc.options import Options
+from .range import Range
+from .options import Options
 
 
 def fetch_safe(bam: pysam.AlignmentFile, r: Range):
@@ -21,23 +22,28 @@ def fetch_safe(bam: pysam.AlignmentFile, r: Range):
     return bam.fetch(r.chr, max(r.start, 1), min(r.end, max_len))
 
 
-def fetch_chrom_sizes(h: pysam.AlignmentHeader) -> list[tuple[str, int]]:
+def fetch_chrom_sizes(h: pysam.AlignmentHeader) -> dict[str, int]:
     """
     Extract chromosome sizes from BAM header (via pysam).
 
     h["SQ"] => [{"SN": "chr1", "LN", 248956422}, ...]
-    output => [("chr1", 248956422), ...]
+    output => {"chr1": 248956422, ...}
     """
-    return [(seq["SN"], seq["LN"]) for seq in h['SQ']]
+    return {seq["SN"]: seq["LN"] for seq in h['SQ']}
 
 
-def write_chrom_sizes(chrom_sizes: list[tuple[str, int]], f):
+def fetch_bw(r: Range, bw):
+    bins = bw.intervals(r.chr, r.start, r.end)
+    return np.array([b[2] for b in bins])
+
+
+def write_chrom_sizes(chrom_sizes: dict[str, int], f):
     """
     Write chromosome sizes to a file in UCSC format. Format is the same as
     the output of `fetch_chrom_sizes`, ie [("chr1", 248956422), ...]
     """
-    for chr, l in chrom_sizes:
-        f.write(f"{chr}\t{l}\n")
+    for chr, size in chrom_sizes.items():
+        f.write(f"{chr}\t{size}\n")
 
 
 @contextmanager
@@ -77,9 +83,9 @@ def make_windows(chrom_info: list[tuple[str, int]], size=10000):
 
 
 class BigWigWriter:
-    def __init__(self, f: str, header: list[tuple[str, int]]):
+    def __init__(self, f: str, header: dict[str, int]):
          self.file = pyBigWig.open(f, 'w')
-         self.file.addHeader(header)
+         self.file.addHeader(header.items())
 
     def write(self, r: Range, data: dict[np.ndarray]):
         self.file.addEntries(r.chr, r.start-1, values=data["smooth"].tolist(), span=Options.bin_size, step=Options.bin_size)
@@ -106,3 +112,20 @@ class BedGraphWriter:
                     "%0.2f" % data["window"][i],
                     "%0.2f" % data["smooth"][i]
             ])
+
+
+class BEDWriter:
+    def __init__(self, f):
+        if f == "-":
+            fh = sys.stdout
+        else:
+            fh = open(f, 'w')
+
+        self.writer = csv.writer(fh, delimiter="\t")
+
+    def write(self, r: Range):
+        self.writer.writerow(astuple(r))
+
+    def writerows(self, ranges: list[Range]):
+        for r in ranges:
+            self.write(r)

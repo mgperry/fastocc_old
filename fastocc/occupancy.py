@@ -3,9 +3,9 @@ import pysam
 from collections import namedtuple
 from collections.abc import Iterable
 
-from fastocc.range import Range
-from fastocc.options import Options
-from fastocc.io import fetch_safe
+from .range import Range
+from .options import Options
+from .io import fetch_safe
 
 
 Fragment = namedtuple("Fragment", ["start", "size"])

@@ -2,12 +2,19 @@ import sys
 import click
 
 import pysam
+import pyBigWig
 from pybedtools import BedTool
 
-from fastocc.range import Range
-from fastocc.occupancy import occupancy
-from fastocc.options import Options
-import fastocc.io as io
+from .range import Range
+from .occupancy import occupancy
+from .options import Options
+from .split import threshold_occupancy
+from . import io
+
+
+@click.group()
+def fastocc():
+    pass
 
 
 @click.command()
@@ -16,7 +23,7 @@ import fastocc.io as io
 @click.option("-o", "--output", help="Output file location (defaults to stdout).", type=str, default="-")
 @click.option("--format", help="Output file format.", type=click.Choice(["bedgraph", "bigwig"]), default="bedgraph")
 @click.option("--pseudocount", help="Pseudocount added to NUC reads (number is for each 10bp bin)", type=float, default=1)
-def cli(bam: str, bed: str, output: str, format: str, pseudocount: float):
+def occ(bam: str, bed: str, output: str, format: str, pseudocount: float):
     if not pseudocount > 0:
         pseudocount = 0.001 # avoid potential div by zero errors
 
@@ -48,4 +55,26 @@ def cli(bam: str, bed: str, output: str, format: str, pseudocount: float):
         occ = occupancy(r, b, pseudocount)
         writer.write(r, occ)
 
+@click.command
+@click.option("--bigwig", help="Bigwig file containing `fastocc occ` output.", required=True, type=str)
+@click.option("--bed", help="BED file containing ranges.", required=True, type=str)
+@click.option("--output", help="Output file location (defaults to stdout).", type=str, default="-")
+@click.option("--threshold", help="Threshold for calling nucleosome free regions.", type=float, default=0.6)
+def nfr(bigwig: str, bed: str, output: str, threshold: float = 0.6):
+    bw = pyBigWig.open(bigwig)
 
+    chrom_sizes = bw.chroms()
+
+    intervals = io.fix_bed(BedTool(bed), chrom_sizes, Options.extend, Options.merge)
+
+    ranges = (Range.from_interval(i).align(Options.bin_size) for i in intervals)
+
+    writer = io.BEDWriter(output)
+
+    for r in ranges:
+        reduced_peaks = threshold_occupancy(r, bw, threshold)
+        writer.writerows(reduced_peaks)
+
+
+fastocc.add_command(occ)
+fastocc.add_command(nfr)
