@@ -32,7 +32,7 @@ def fetch_fragments(bam: pysam.AlignmentFile, r: Range) -> Iterable[Fragment]:
             yield Fragment(left_insertion, fragment_size)
 
 
-def bin_and_split_reads(bam: pysam.AlignmentFile, r: Range) -> tuple[np.ndarray, np.ndarray]:
+def bin_and_split_fragments(fragments: list[Fragment], r: Range) -> tuple[np.ndarray, np.ndarray]:
     """
     Read ATAC-seq fragments into a matrix of 10bp bins based on their midpoints, and
     classifies them based on insertion length (insertions less than 120 are 
@@ -45,7 +45,7 @@ def bin_and_split_reads(bam: pysam.AlignmentFile, r: Range) -> tuple[np.ndarray,
     nfr = np.zeros(n_bins)
     nuc = np.zeros(n_bins)
 
-    for f in fetch_fragments(bam, r):           
+    for f in fragments:
 
         midpoint = f.start + (f.size - 1) // 2
         
@@ -102,7 +102,10 @@ def occupancy(r: Range, bam: pysam.AlignmentFile, pseudocount: int) -> dict[np.n
     shift = Options.bins // 2
 
     # double shift for windowing and smoothing
-    nfr, nuc = bin_and_split_reads(bam, r.extend(2*shift*Options.bin_size))
+    r_ext = r.extend(2*shift*Options.bin_size)
+
+    fragments = fetch_fragments(bam, r_ext)
+    nfr, nuc = bin_and_split_fragments(fragments, r_ext)
     occ = raw_occ(nfr, nuc + pseudocount)
 
     return {
