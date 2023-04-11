@@ -55,17 +55,23 @@ def occ(bam: str, bed: str, output: str, format: str, pseudocount: float):
         occ = occupancy(r, b, pseudocount)
         writer.write(r, occ)
 
+
 @click.command
 @click.option("--bigwig", help="Bigwig file containing `fastocc occ` output.", required=True, type=str)
 @click.option("--bed", help="BED file containing ranges.", required=True, type=str)
 @click.option("--output", help="Output file location (defaults to stdout).", type=str, default="-")
 @click.option("--threshold", help="Threshold for calling nucleosome free regions.", type=float, default=0.6)
-def nfr(bigwig: str, bed: str, output: str, threshold: float = 0.6):
+@click.option("--merge/--no-merge", help="Disable extending and merging input BED: user must guarantee non-overlapping ranges", default=True)
+def nfr(bigwig: str, bed: str, output: str, threshold: float = 0.6, merge: bool=True):
     bw = pyBigWig.open(bigwig)
 
     chrom_sizes = bw.chroms()
 
-    intervals = io.fix_bed(BedTool(bed), chrom_sizes, Options.extend, Options.merge)
+    if merge:
+        intervals = io.fix_bed(BedTool(bed), chrom_sizes, Options.extend, Options.merge)
+    else:
+        with io.temp_chrom_info(chrom_sizes) as genome:
+            intervals = BedTool(bed).sort(g=genome)
 
     ranges = (Range.from_interval(i).align(Options.bin_size) for i in intervals)
 

@@ -12,6 +12,13 @@ def contiguous_regions(x: np.ndarray) -> Iterator[tuple]:
     a generator of (start, stop) tuples.
 
     e.g. [0, 0, 1, 1, 1, 0, 1, 1, 0] => (2,5); (6,8)
+
+    NB If the interval starts or ends with 1, this is handled, as a result the indexing
+    is basically BED-like, ie (0, 1) represents an interval containing just the first
+    item. This should be very rare for our exact use case, it means that the peak caller
+    has missed a nucleosome free region.
+
+    e.g. [1, 0, 0, 1, 1] => (0, 1); (3, 5)
     """
     d = np.diff(x)
     idx = d.nonzero()[0] + 1
