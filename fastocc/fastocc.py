@@ -9,6 +9,7 @@ from .range import Range
 from .occupancy import occupancy
 from .options import Options
 from .split import threshold_occupancy
+from .fragments import Fragments
 from . import io
 
 
@@ -32,6 +33,8 @@ def occ(bam: str, bed: str, output: str, format: str, pseudocount: float):
 
     b = pysam.AlignmentFile(bam)
 
+    fragments = Fragments(b)
+
     if not b.has_index():
         print("No BAM index found, indexing BAM file...", file=sys.stderr)
         pysam.index(b.filename)
@@ -52,7 +55,7 @@ def occ(bam: str, bed: str, output: str, format: str, pseudocount: float):
         writer = io.BedGraphWriter(output)
     
     for r in ranges:
-        occ = occupancy(r, b, pseudocount)
+        occ = occupancy(r, fragments, pseudocount)
         writer.write(r, occ)
 
 

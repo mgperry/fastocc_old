@@ -1,36 +1,8 @@
 import numpy as np
-import pysam
-from collections import namedtuple
-from collections.abc import Iterable
 
 from .range import Range
 from .options import Options
-from .io import fetch_safe
-
-
-Fragment = namedtuple("Fragment", ["start", "size"])
-
-
-def fetch_fragments(bam: pysam.AlignmentFile, r: Range) -> Iterable[Fragment]:
-    """
-    Reconstruct full-length ATAC-seq fragments from a bam file. Filters for the first
-    read of proper pairs, corrects the Tn5 insertion distance and returns the start and
-    length (size) of a fragment in a named tuple.
-    """
-    q = r.extend(Options.max_insert//2) # this is to capture long fragments
-
-    for read in fetch_safe(bam, q):
-        if read.is_proper_pair and not read.is_reverse:
-            #get left position
-            left_insertion = read.pos + 4
-            # insert size corrected by 8 base pairs to be insertion to insertion
-            fragment_size = read.template_length - 8
-
-            if fragment_size > Options.max_insert:
-                continue
-            
-            yield Fragment(left_insertion, fragment_size)
-
+from .fragments import Fragments, Fragment
 
 def bin_and_split_fragments(fragments: list[Fragment], r: Range) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -98,13 +70,13 @@ def smooth(x: np.ndarray):
     return smoothed / Options.gaussian_norm
 
 
-def occupancy(r: Range, bam: pysam.AlignmentFile, pseudocount: int) -> dict[np.ndarray]:
+def occupancy(r: Range, frags: Fragments, pseudocount: int) -> dict[np.ndarray]:
     shift = Options.bins // 2
 
     # double shift for windowing and smoothing
     r_ext = r.extend(2*shift*Options.bin_size)
 
-    fragments = fetch_fragments(bam, r_ext)
+    fragments = frags.fetch(r_ext)
     nfr, nuc = bin_and_split_fragments(fragments, r_ext)
     occ = raw_occ(nfr, nuc + pseudocount)
 
