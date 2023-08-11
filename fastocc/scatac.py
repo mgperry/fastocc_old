@@ -24,8 +24,8 @@ def fragments_from_chr(chr, cell):
     elif len(is_correct_id) == 0:
         # not all chromosomes contain fragments from all cells
         return pd.DataFrame({
-            "start": np.array([]),
-            "end": np.array([]),
+            "start": np.array([], dtype=int),
+            "length": np.array([], dtype=int),
             "cell": [],
         })
     else:
@@ -56,7 +56,6 @@ class ArrowFragments:
 
             frags[chr] = self.sort_by_midpoint(pd.concat(frags_by_cell))
 
-        print("all ranges read")
         self.fragments = frags
         self.cells = cells
 
