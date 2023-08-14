@@ -2,9 +2,9 @@ import numpy as np
 
 from .range import Range
 from .options import Options
-from .fragments import Fragments, Fragment
+from .fragments import Fragments, FragmentSource
 
-def bin_and_split_fragments(fragments: list[Fragment], r: Range) -> tuple[np.ndarray, np.ndarray]:
+def bin_and_split_fragments(frags: Fragments) -> tuple[np.ndarray, np.ndarray]:
     """
     Read ATAC-seq fragments into a matrix of 10bp bins based on their midpoints, and
     classifies them based on insertion length (insertions less than 120 are 
@@ -12,22 +12,21 @@ def bin_and_split_fragments(fragments: list[Fragment], r: Range) -> tuple[np.nda
     these are rare in any case).
     """
 
-    n_bins = len(r) // Options.bin_size
+    n_bins = len(frags.range) // Options.bin_size
 
     nfr = np.zeros(n_bins)
     nuc = np.zeros(n_bins)
 
-    for f in fragments:
+    bin = (frags.midpoint - frags.range.start + 1) // Options.bin_size
 
-        midpoint = f.start + (f.size - 1) // 2
-        
-        bin = (midpoint - r.start + 1) // Options.bin_size
-        
-        if bin >= 0 and bin < n_bins:
-            if f.size <= Options.nfr_cutoff:
-                nfr[bin] += 1
-            else:
-                nuc[bin] += 1
+    in_bounds = (bin < 0) & (bin <= n_bins)
+
+    is_nfr = frags.size < 121
+
+    is_nuc = frags.size >= 121
+
+    np.add.at(nfr, bin[in_bounds & is_nfr], 1)
+    np.add.at(nuc, bin[in_bounds & is_nuc], 1)
 
     return nfr, nuc
 
@@ -70,14 +69,14 @@ def smooth(x: np.ndarray):
     return smoothed / Options.gaussian_norm
 
 
-def occupancy(r: Range, frags: Fragments, pseudocount: int) -> dict[np.ndarray]:
+def occupancy(r: Range, frags: FragmentSource, pseudocount: int) -> dict[np.ndarray]:
     shift = Options.bins // 2
 
     # double shift for windowing and smoothing
     r_ext = r.extend(2*shift*Options.bin_size)
 
     fragments = frags.fetch(r_ext)
-    nfr, nuc = bin_and_split_fragments(fragments, r_ext)
+    nfr, nuc = bin_and_split_fragments(fragments)
     occ = raw_occ(nfr, nuc + pseudocount)
 
     return {

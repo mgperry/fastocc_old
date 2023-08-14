@@ -2,10 +2,9 @@ import numpy as np
 import h5py
 import pandas as pd
 from pybedtools import BedTool
-from collections.abc import Iterator
 
 from .range import Range
-from .fragments import Fragment
+from .fragments import Fragments, FragmentSource
 from . import io
 from .options import Options
 from .occupancy import occupancy
@@ -25,8 +24,7 @@ def fragments_from_chr(chr, cell):
         # not all chromosomes contain fragments from all cells
         return pd.DataFrame({
             "start": np.array([], dtype=int),
-            "length": np.array([], dtype=int),
-            "cell": [],
+            "size": np.array([], dtype=int),
         })
     else:
         raise Exception("Cell ID should be unique.")
@@ -36,12 +34,11 @@ def fragments_from_chr(chr, cell):
 
     return pd.DataFrame({
         "start": chr["Ranges"][0, start:end],
-        "length": chr["Ranges"][1, start:end],
-        "cell": cell,
+        "size": chr["Ranges"][1, start:end],
     })
 
 
-class ArrowFragments:
+class ArrowFragments(FragmentSource):
     """
     Read all fragments from a subset of cells into memory, reading the file once. 
     """
@@ -56,24 +53,18 @@ class ArrowFragments:
 
             frags[chr] = self.sort_by_midpoint(pd.concat(frags_by_cell))
 
-        self.fragments = frags
+        self.frags = frags
         self.cells = cells
 
     @staticmethod
-    def sort_by_midpoint(df):
-        df["midpoint"] = df["start"] + df["length"] // 2
+    def sort_by_midpoint(df: pd.DataFrame):
+        df["midpoint"] = df["start"] + df["size"] // 2
         return df.sort_values("midpoint")
-    
 
-    def iter_ranges(self, ranges: list[Range]) -> Iterator[list[Fragment]]:
-        for r in ranges:
-            yield self.fetch(r)
-
-
-    def fetch(self, r: Range) -> list[Fragment]:
-        idx = np.searchsorted(self.fragments[r.chr]["midpoint"], [r.start, r.end])
-        df = self.fragments[r.chr].iloc[idx[0]:idx[1]]
-        return [Fragment(f.start, f.length) for f in df.itertuples()]
+    def fetch(self, r: Range) -> Fragments:
+        idx = np.searchsorted(self.frags[r.chr]["midpoint"], [r.start, r.end])
+        df = self.frags[r.chr].iloc[idx[0]:idx[1]]
+        return Fragments(r, df["midpoint"], df["size"])
 
 
 def sc_occ(arrow: str, bed: str, output: str, chrom_sizes: dict[str, int], pseudocount: float):

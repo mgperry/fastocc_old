@@ -9,7 +9,7 @@ from .range import Range
 from .occupancy import occupancy
 from .options import Options
 from .split import threshold_occupancy
-from .fragments import Fragments
+from .fragments import BamFragments
 from . import io
 
 
@@ -33,7 +33,7 @@ def occ(bam: str, bed: str, output: str, format: str, pseudocount: float):
 
     b = pysam.AlignmentFile(bam)
 
-    fragments = Fragments(b)
+    fragments = BamFragments(b)
 
     if not b.has_index():
         print("No BAM index found, indexing BAM file...", file=sys.stderr)
