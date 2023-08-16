@@ -107,8 +107,8 @@ class BedGraphWriter:
                     bin.chr,
                     str(bin.start-1),
                     str(bin.end),
-                    "%d" % data["nuc"][i],
                     "%d" % data["nfr"][i],
+                    "%d" % data["nuc"][i],
                     "%0.2f" % data["window"][i],
                     "%0.2f" % data["smooth"][i]
             ])

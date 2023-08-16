@@ -6,7 +6,7 @@ import pyBigWig
 from pybedtools import BedTool
 
 from .range import Range
-from .occupancy import occupancy
+from .occupancy import calculate_occupancy
 from .options import Options
 from .split import threshold_occupancy
 from .fragments import BamFragments
@@ -55,7 +55,7 @@ def occ(bam: str, bed: str, output: str, format: str, pseudocount: float):
         writer = io.BedGraphWriter(output)
     
     for r in ranges:
-        occ = occupancy(r, fragments, pseudocount)
+        occ = calculate_occupancy(r, fragments, pseudocount)
         writer.write(r, occ)
 
 

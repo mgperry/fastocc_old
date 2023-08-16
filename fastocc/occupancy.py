@@ -19,7 +19,7 @@ def bin_and_split_fragments(frags: Fragments) -> tuple[np.ndarray, np.ndarray]:
 
     bin = (frags.midpoint - frags.range.start + 1) // Options.bin_size
 
-    in_bounds = (bin < 0) & (bin <= n_bins)
+    in_bounds = (bin >= 0) & (bin < n_bins)
 
     is_nfr = frags.size < 121
 
@@ -69,7 +69,7 @@ def smooth(x: np.ndarray):
     return smoothed / Options.gaussian_norm
 
 
-def occupancy(r: Range, frags: FragmentSource, pseudocount: int) -> dict[np.ndarray]:
+def calculate_occupancy(r: Range, frags: FragmentSource, pseudocount: int) -> dict[np.ndarray]:
     shift = Options.bins // 2
 
     # double shift for windowing and smoothing

@@ -7,7 +7,7 @@ from .range import Range
 from .fragments import Fragments, FragmentSource
 from . import io
 from .options import Options
-from .occupancy import occupancy
+from .occupancy import calculate_occupancy
 
 
 def load_fragments(chr: h5py.Group):
@@ -64,7 +64,7 @@ class ArrowFragments(FragmentSource):
     def fetch(self, r: Range) -> Fragments:
         idx = np.searchsorted(self.frags[r.chr]["midpoint"], [r.start, r.end])
         df = self.frags[r.chr].iloc[idx[0]:idx[1]]
-        return Fragments(r, df["midpoint"], df["size"])
+        return Fragments(r, df["midpoint"].values, df["size"].values)
 
 
 def sc_occ(arrow: str, bed: str, output: str, chrom_sizes: dict[str, int], pseudocount: float):
@@ -80,5 +80,5 @@ def sc_occ(arrow: str, bed: str, output: str, chrom_sizes: dict[str, int], pseud
     writer = io.BedGraphWriter(output)
     
     for r in ranges:
-        occ = occupancy(r, fragments, pseudocount)
+        occ = calculate_occupancy(r, fragments, pseudocount)
         writer.write(r, occ)
