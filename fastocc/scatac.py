@@ -65,20 +65,3 @@ class ArrowFragments(FragmentSource):
         idx = np.searchsorted(self.frags[r.chr]["midpoint"], [r.start, r.end])
         df = self.frags[r.chr].iloc[idx[0]:idx[1]]
         return Fragments(r, df["midpoint"].values, df["size"].values)
-
-
-def sc_occ(arrow: str, bed: str, output: str, chrom_sizes: dict[str, int], pseudocount: float):
-    if not pseudocount > 0:
-        pseudocount = 0.001 # avoid potential div by zero errors
-
-    fragments = ArrowFragments(arrow)
-
-    intervals = io.fix_bed(BedTool(bed), chrom_sizes, Options.extend, Options.merge)
-
-    ranges = (Range.from_interval(i).align(Options.bin_size) for i in intervals)
-
-    writer = io.BedGraphWriter(output)
-    
-    for r in ranges:
-        occ = calculate_occupancy(r, fragments, pseudocount)
-        writer.write(r, occ)

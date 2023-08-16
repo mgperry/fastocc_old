@@ -6,10 +6,10 @@ import pyBigWig
 from pybedtools import BedTool
 
 from .range import Range
-from .occupancy import calculate_occupancy
+from .occupancy import Occupancy
 from .options import Options
 from .split import threshold_occupancy
-from .fragments import BamFragments
+from .fragments import BamFragments, Fragments
 from . import io
 
 
@@ -28,26 +28,28 @@ def occ(bam: str, bed: str, output: str, format: str, pseudocount: float):
     if not pseudocount > 0:
         pseudocount = 0.001 # avoid potential div by zero errors
 
+    opts = Options(pseudocount=pseudocount)
+
     if format == "bigwig" and output == "-":
         raise click.UsageError("Output must be a file if output format is bigwig")
 
     b = pysam.AlignmentFile(bam)
-
-    fragments = BamFragments(b)
 
     if not b.has_index():
         print("No BAM index found, indexing BAM file...", file=sys.stderr)
         pysam.index(b.filename)
         b = pysam.AlignmentFile(bam) # reload index
 
+    fragments = BamFragments(b)
+
     chrom_sizes = io.fetch_chrom_sizes(b.header)
 
     if bed:
-        intervals = io.fix_bed(BedTool(bed), chrom_sizes, Options.extend, Options.merge)
+        intervals = io.fix_bed(BedTool(bed), chrom_sizes, opts.extend, opts.merge)
     else:
         intervals = io.make_windows(chrom_sizes)
 
-    ranges = (Range.from_interval(i).align(Options.bin_size) for i in intervals)
+    ranges = (Range.from_interval(i).align(opts.bin_size) for i in intervals)
 
     if format == "bigwig":
         writer = io.BigWigWriter(output, header=chrom_sizes)
@@ -55,8 +57,9 @@ def occ(bam: str, bed: str, output: str, format: str, pseudocount: float):
         writer = io.BedGraphWriter(output)
     
     for r in ranges:
-        occ = calculate_occupancy(r, fragments, pseudocount)
-        writer.write(r, occ)
+        frags = fragments.fetch(r.extend(2*opts.shift*opts.bin_size))
+        occ = Occupancy(frags, opts)
+        writer.write(r, occ.unshift())
 
 
 @click.command
