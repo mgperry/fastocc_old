@@ -1,8 +1,11 @@
+from dataclasses import dataclass, astuple
+
 import numpy as np
 import pandas as pd
 
 from .options import Options
 from .fragments import Fragments
+from .range import Range
 
 def bin_and_split_fragments(frags: Fragments, bin_size, cutoff) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -11,6 +14,9 @@ def bin_and_split_fragments(frags: Fragments, bin_size, cutoff) -> tuple[np.ndar
     nucleosome-free. The insertion length is capped at 1000bp to improve efficiency (NB 
     these are rare in any case).
     """
+
+    if not frags.range.align(bin_size) == frags.range:
+        raise ValueError("Fragments.range must be aligned to provided bin_size")
 
     n_bins = len(frags.range) // bin_size
 
@@ -70,31 +76,44 @@ def smooth(x: np.ndarray, gaussian, gaussian_norm):
     return smoothed / gaussian_norm
 
 
+@dataclass
 class Occupancy:
-    def __init__(self, fragments: Fragments, options: Options):
-        # check fragments.range is aligned to options.bin_size
-        self.fragments = fragments
-        self.options = options
+    range: Range
+    data: pd.DataFrame
+    options: Options
 
-        nfr, nuc = bin_and_split_fragments(self.fragments, self.options.bin_size, self.options.nfr_cutoff)
+    def to_data_frame(self) -> pd.DataFrame:
+        bed = pd.DataFrame(
+            [r[:3] for r in self.range.make_bins],
+            columns=["chr", "start", "end"]
+        )
 
-        self.nfr_windows = rolling_window(nfr, self.options.window_size)
-        self.nuc_windows = rolling_window(nuc + self.options.pseudocount, self.options.window_size)
+        return pd.concat(bed, self.data, axis=1)
 
-        self.nfr = nfr
-        self.nuc = nuc
 
-        self.occ = calculate_occupancy(self.nfr_windows, self.nuc_windows, self.options.nfr_ratio)
-        self.smooth = smooth(self.occ, self.options.gaussian, self.options.gaussian_norm)
+def occ_from_fragments(fragments: Fragments, options: Options = None) -> Occupancy:
+    if options is None:
+        options = Options()
 
-    def unshift(self):
-        s = self.options.shift
+    nfr, nuc = bin_and_split_fragments(fragments, options.bin_size, options.nfr_cutoff)
 
-        return {
-            "nfr": self.nfr[2*s:-2*s],
-            "nuc": self.nuc[2*s:-2*s],
-            "window": self.occ[s:-s],
-            "smooth": self.smooth
-        }
-    
+    nfr_windows = rolling_window(nfr, options.window_size)
+    nuc_windows = rolling_window(nuc + options.pseudocount, options.window_size)
 
+    occ = calculate_occupancy(nfr_windows, nuc_windows, options.nfr_ratio)
+    smooth = smooth(occ, options.gaussian, options.gaussian_norm)
+
+    s = options.shift
+
+    data = pd.DataFrame({
+        "nfr": nfr,
+        "nuc": nuc,
+        "occ": occ[s:-s],
+        "smooth": smooth[2*s:-2*s],
+    })
+
+    return Occupancy(
+        fragments.range.extend(-s),
+        data,
+        options,
+    )

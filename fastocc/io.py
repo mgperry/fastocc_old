@@ -12,6 +12,7 @@ import pyBigWig
 
 from .range import Range
 from .options import Options
+from .occupancy import Occupancy
 
 
 def fetch_safe(bam: pysam.AlignmentFile, r: Range):
@@ -87,31 +88,29 @@ class BigWigWriter:
          self.file = pyBigWig.open(f, 'w')
          self.file.addHeader(header.items())
 
-    def write(self, r: Range, data: dict[np.ndarray]):
-        self.file.addEntries(r.chr, r.start-1, values=data["smooth"].tolist(), span=Options.bin_size, step=Options.bin_size)
+    def write(self, occ: Occupancy):
+        self.file.addEntries(
+            occ.range.chr,
+            occ.range.start-1,
+            values=occ.data["smooth"].values.tolist(),
+            span=occ.options.bin_size,
+            step=occ.options.bin_size,
+        )
 
 
 class BedGraphWriter:
+    header = ["chr", "start", "end", "nfr", "nuc", "window", "smooth"]
+
     def __init__(self, f):
         if f == "-":
-            fh = sys.stdout
+            self.fh = sys.stdout
         else:
-            fh = open(f, 'w')
+            self.fh = open(f, 'w')
 
-        self.file = csv.writer(fh, delimiter="\t")
-        self.file.writerow(["chr", "start", "end", "nfr", "nuc", "window", "smooth"])
+        self.fh.write("\t".join(self.header) + "\n")
 
-    def write(self, r: Range, data: dict[np.ndarray]):
-        for i, bin in enumerate(r.make_bins(Options.bin_size)):
-            self.file.writerow([
-                    bin.chr,
-                    str(bin.start-1),
-                    str(bin.end),
-                    "%d" % data["nfr"][i],
-                    "%d" % data["nuc"][i],
-                    "%0.2f" % data["window"][i],
-                    "%0.2f" % data["smooth"][i]
-            ])
+    def write(self, occ: Occupancy):
+        occ.to_data_frame().to_csv(self.fh, sep="\t", header=False, index=False)
 
 
 class BEDWriter:

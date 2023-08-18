@@ -6,10 +6,10 @@ import pyBigWig
 from pybedtools import BedTool
 
 from .range import Range
-from .occupancy import Occupancy
+from .occupancy import occ_from_fragments
 from .options import Options
 from .split import threshold_occupancy
-from .fragments import BamFragments, Fragments
+from .fragments import BamFragments
 from . import io
 
 
@@ -58,8 +58,8 @@ def occ(bam: str, bed: str, output: str, format: str, pseudocount: float):
     
     for r in ranges:
         frags = fragments.fetch(r.extend(2*opts.shift*opts.bin_size))
-        occ = Occupancy(frags, opts)
-        writer.write(r, occ.unshift())
+        occ = occ_from_fragments(frags, opts)
+        writer.write(occ)
 
 
 @click.command
