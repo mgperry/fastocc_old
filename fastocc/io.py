@@ -12,7 +12,7 @@ import pyBigWig
 
 from .range import Range
 from .options import Options
-from .occupancy import Occupancy
+# from .occupancy import Occupancy
 
 
 def fetch_safe(bam: pysam.AlignmentFile, r: Range):
@@ -86,9 +86,9 @@ def make_windows(chrom_info: list[tuple[str, int]], size=10000):
 class BigWigWriter:
     def __init__(self, f: str, header: dict[str, int]):
          self.file = pyBigWig.open(f, 'w')
-         self.file.addHeader(header.items())
+         self.file.addHeader(list(header.items()))
 
-    def write(self, occ: Occupancy):
+    def write(self, occ):
         self.file.addEntries(
             occ.range.chr,
             occ.range.start-1,
@@ -109,7 +109,7 @@ class BedGraphWriter:
 
         self.fh.write("\t".join(self.header) + "\n")
 
-    def write(self, occ: Occupancy):
+    def write(self, occ):
         occ.to_data_frame().to_csv(self.fh, sep="\t", header=False, index=False)
 
 
