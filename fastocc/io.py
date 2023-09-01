@@ -110,7 +110,13 @@ class BedGraphWriter:
         self.fh.write("\t".join(self.header) + "\n")
 
     def write(self, occ):
-        occ.to_data_frame().to_csv(self.fh, sep="\t", header=False, index=False)
+        occ.to_data_frame().to_csv(
+            self.fh,
+            sep="\t",
+            float_format="%.2f",
+            header=False,
+            index=False
+        )
 
 
 class BEDWriter:

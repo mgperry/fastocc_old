@@ -20,8 +20,8 @@ def bin_and_split_fragments(frags: Fragments, bin_size, cutoff) -> tuple[np.ndar
 
     n_bins = len(frags.range) // bin_size
 
-    nfr = np.zeros(n_bins)
-    nuc = np.zeros(n_bins)
+    nfr = np.zeros(n_bins, dtype=np.intc)
+    nuc = np.zeros(n_bins, dtype=np.intc)
 
     bin = (frags.midpoint - frags.range.start + 1) // bin_size
 
@@ -83,12 +83,14 @@ class Occupancy:
     options: Options
 
     def to_data_frame(self) -> pd.DataFrame:
+        bins = self.range.make_bins(self.options.bin_size)
+
         bed = pd.DataFrame(
-            [r[:3] for r in self.range.make_bins],
+            [(r.chr, r.start, r.end) for r in bins],
             columns=["chr", "start", "end"]
         )
 
-        return pd.concat(bed, self.data, axis=1)
+        return pd.concat([bed, self.data], axis=1)
 
 
 def occ_from_fragments(fragments: Fragments, options: Options = None) -> Occupancy:
@@ -101,19 +103,22 @@ def occ_from_fragments(fragments: Fragments, options: Options = None) -> Occupan
     nuc_windows = rolling_window(nuc + options.pseudocount, options.window_size)
 
     occ = calculate_occupancy(nfr_windows, nuc_windows, options.nfr_ratio)
-    smooth = smooth(occ, options.gaussian, options.gaussian_norm)
+    smoothed = smooth(occ, options.gaussian, options.gaussian_norm)
 
     s = options.shift
 
     data = pd.DataFrame({
-        "nfr": nfr,
-        "nuc": nuc,
+        "nfr": nfr[2*s:-2*s],
+        "nuc": nuc[2*s:-2*s],
         "occ": occ[s:-s],
-        "smooth": smooth[2*s:-2*s],
+        "smooth": smoothed,
     })
 
+    shift_bp = 2 * s * options.bin_size
+
+    # if we are clipping data, we should clip range
     return Occupancy(
-        fragments.range.extend(-s),
+        fragments.range.extend(-shift_bp),
         data,
         options,
     )
