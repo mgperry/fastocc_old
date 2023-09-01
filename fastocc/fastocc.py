@@ -3,14 +3,12 @@ import click
 
 import pysam
 import pyBigWig
-from pybedtools import BedTool
 
-from .range import Range
-from .occupancy import occ_from_fragments
+from .range import BedFile
+from .occupancy import Occupancy
 from .options import Options
-from .split import threshold_occupancy
 from .fragments import BamFragments
-from . import io
+from .io import BigWigWriter, BedGraphWriter, BEDWriter, fetch_chrom_sizes
 
 
 @click.group()
@@ -20,7 +18,7 @@ def fastocc():
 
 @click.command()
 @click.option("--bam", help="BAM file containing ATAC-seq reads", required=True, type=str)
-@click.option("--bed", help="BED file containing ranges. If not supplied, calulate occupancy genome-wide.", type=str)
+@click.option("--bed", help="BED file containing ranges.", type=str)
 @click.option("-o", "--output", help="Output file location (defaults to stdout).", type=str, default="-")
 @click.option("--format", help="Output file format.", type=click.Choice(["bedgraph", "bigwig"]), default="bedgraph")
 @click.option("--pseudocount", help="Pseudocount added to NUC reads (number is for each 10bp bin)", type=float, default=1)
@@ -33,33 +31,27 @@ def occ(bam: str, bed: str, output: str, format: str, pseudocount: float):
     if format == "bigwig" and output == "-":
         raise click.UsageError("Output must be a file if output format is bigwig")
 
-    b = pysam.AlignmentFile(bam)
+    bam_file = pysam.AlignmentFile(bam)
 
-    if not b.has_index():
+    if not bam_file.has_index():
         print("No BAM index found, indexing BAM file...", file=sys.stderr)
-        pysam.index(b.filename)
-        b = pysam.AlignmentFile(bam) # reload index
+        pysam.index(bam_file.filename)
+        bam_file = pysam.AlignmentFile(bam) # reload index
 
-    fragments = BamFragments(b)
+    chrom_sizes = fetch_chrom_sizes(bam_file.header)
 
-    chrom_sizes = io.fetch_chrom_sizes(b.header)
+    ranges = BedFile(bed, chrom_sizes, opts)
 
-    if bed:
-        intervals = io.fix_bed(BedTool(bed), chrom_sizes, opts.extend, opts.merge)
-    else:
-        intervals = io.make_windows(chrom_sizes)
-
-    ranges = (Range.from_interval(i).align(opts.bin_size) for i in intervals)
+    fragments = BamFragments(bam_file, ranges, opts)
 
     if format == "bigwig":
-        writer = io.BigWigWriter(output, header=chrom_sizes)
+        writer = BigWigWriter(output, header=chrom_sizes)
     else:
-        writer = io.BedGraphWriter(output)
+        writer = BedGraphWriter(output)
     
-    for r in ranges:
-        frags = fragments.fetch(r.extend(2*opts.shift*opts.bin_size))
-        occ = occ_from_fragments(frags, opts)
-        writer.write(occ)
+    for frags in fragments:
+        occupancy = Occupancy.from_fragments(frags)
+        writer.write(occupancy)
 
 
 @click.command
@@ -73,19 +65,24 @@ def nfr(bigwig: str, bed: str, output: str, threshold: float = 0.6, merge: bool=
 
     chrom_sizes = bw.chroms()
 
-    if merge:
-        intervals = io.fix_bed(BedTool(bed), chrom_sizes, Options.extend, Options.merge)
-    else:
-        with io.temp_chrom_info(chrom_sizes) as genome:
-            intervals = BedTool(bed).sort(g=genome)
+    opts = Options(
+        nfr_threshold = threshold
+    )
 
-    ranges = (Range.from_interval(i).align(Options.bin_size) for i in intervals)
+    # I think this is required to avoid getting NAs from the bigwig file
+    # TODO should just default to zero
+    if not merge:
+        opts.extend = 0
+        opts.merge = 0
 
-    writer = io.BEDWriter(output)
+    ranges = BedFile(bed, chrom_sizes, opts)
+
+    writer = BEDWriter(output)
 
     for r in ranges:
-        reduced_peaks = threshold_occupancy(r, bw, threshold)
-        writer.writerows(reduced_peaks)
+        occupancy = Occupancy.from_bigwig(bw, r, opts)
+        nfrs = occupancy.threshold()
+        writer.writerows(nfrs)
 
 
 fastocc.add_command(occ)

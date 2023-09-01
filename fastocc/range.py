@@ -1,6 +1,9 @@
 from dataclasses import dataclass, replace
 from typing_extensions import Self
-import pybedtools
+from pybedtools import BedTool
+
+from .io import write_chrom_sizes
+from .options import Options
 
 
 @dataclass(frozen=True)
@@ -63,11 +66,53 @@ class Range:
         """
         return self.end - self.start + 1
 
+
+class BedFile:
+    """
+    Class to represent a list of ranges as a BED file on disk, saving memory, and also
+    making sure the file is sorted and non-overlapping, and align the ranges to
+    genomic bins.
+
+    Uses of this class should also accept any object that will give Ranges when iterated
+    over.
+    """
+    bed: BedTool
+    opts: Options=None
+
+    def __iter__(self):
+        for i in self.bed:
+            score = i.score if i.score != "." else 0
+            r = Range(i.chrom, i.start+1, i.end, i.name, score, i.strand)
+            return r.align(self.opts.bin_size)
+
     @classmethod
-    def from_interval(cls, i: pybedtools.Interval) -> Self:
+    def from_bed(cls, bed: str, chrom_info: dict[str, int], opts: Options=None):
+        opts = Options.check(opts)
+
+        with open(".chrom_info", 'w') as genome:
+            write_chrom_sizes(chrom_info, genome)
+            fixed = BedTool(bed).slop(l=opts.extend, r=opts.extend, g=genome).sort(g=genome).merge(d=opts.merge)
+
+        return cls(
+            fixed,
+            opts
+        )
+
+    @classmethod
+    def make_windows(cls, chrom_info: list[tuple[str, int]], size=10000, opts=None):
         """
-        Convenience function to create Range from pybedtools.Interval. Assumes 0-based input
-        (ie correct BED format).
+        Wrap window_maker function to use chromsizes.
+
+        NB chromsizes are created in order, so no need to pipe into sort and so we
+        avoid PR#380
         """
-        score = i.score if i.score != "." else 0
-        return Range(i.chrom, i.start+1, i.end, i.name, score, i.strand)
+        opts = Options.check(opts)
+
+        g = {chr: (0, end) for chr, end in chrom_info}
+        windows = BedTool().set_chromsizes(g).window_maker(w=size)
+
+        return cls(
+            windows,
+            opts
+        )
+

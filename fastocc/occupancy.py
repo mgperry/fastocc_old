@@ -1,40 +1,38 @@
-from dataclasses import dataclass, astuple
+from dataclasses import dataclass, replace
+from typing import Iterator
 
 import numpy as np
 import pandas as pd
 
 from .options import Options
-from .fragments import Fragments
+from .fragments import Fragments, BinnedFragments
 from .range import Range
 
-def bin_and_split_fragments(frags: Fragments, bin_size, cutoff) -> tuple[np.ndarray, np.ndarray]:
+def nonzero_intervals(x: np.ndarray) -> Iterator[tuple]:
     """
-    Read ATAC-seq fragments into a matrix of 10bp bins based on their midpoints, and
-    classifies them based on insertion length (insertions less than 120 are 
-    nucleosome-free. The insertion length is capped at 1000bp to improve efficiency (NB 
-    these are rare in any case).
+    Calculate continuous regions in a numpy array, returning
+    a generator of (start, stop) tuples.
+
+    e.g. [0, 0, 1, 1, 1, 0, 1, 1, 0] => (2,5); (6,8)
+
+    NB If the interval starts or ends with 1, this is handled, as a result the indexing
+    is basically BED-like, ie (0, 1) represents an interval containing just the first
+    item. This should be very rare for our exact use case, it means that the peak caller
+    has missed a nucleosome free region.
+
+    e.g. [1, 0, 0, 1, 1] => (0, 1); (3, 5)
     """
+    d = np.diff(x)
+    idx = d.nonzero()[0] + 1
 
-    if not frags.range.align(bin_size) == frags.range:
-        raise ValueError("Fragments.range must be aligned to provided bin_size")
+    if x[0]:
+        idx = np.r_[0, idx]
 
-    n_bins = len(frags.range) // bin_size
+    if x[-1]:
+        idx = np.r_[idx, x.size]
 
-    nfr = np.zeros(n_bins, dtype=np.intc)
-    nuc = np.zeros(n_bins, dtype=np.intc)
-
-    bin = (frags.midpoint - frags.range.start + 1) // bin_size
-
-    in_bounds = (bin >= 0) & (bin < n_bins)
-
-    is_nfr = frags.size < cutoff
-
-    is_nuc = frags.size >= cutoff
-
-    np.add.at(nfr, bin[in_bounds & is_nfr], 1)
-    np.add.at(nuc, bin[in_bounds & is_nuc], 1)
-
-    return nfr, nuc
+    for start, stop in np.reshape(idx, (-1, 2)):
+        yield start, stop
 
 # should be a rolling window function and a separate calculation
 def rolling_window(arr: np.ndarray, window_size: int):
@@ -49,7 +47,7 @@ def rolling_window(arr: np.ndarray, window_size: int):
     return np.sum(arr[index], 1)
 
 
-def calculate_occupancy(nfr: np.ndarray, nuc: np.ndarray, nfr_ratio: int):
+def linear_occupancy(nfr: np.ndarray, nuc: np.ndarray, nfr_ratio: int):
     """
     Calculates nucleosome occupancy from a vector of nucleosome-free and nucleosomal 
     reads, based on the formula (NFR*1.22) / (NFR + NUC).
@@ -61,6 +59,9 @@ def calculate_occupancy(nfr: np.ndarray, nuc: np.ndarray, nfr_ratio: int):
 
     # corrected values can't exceed 1
     return occ.clip(max=1)
+
+def mixture_occupancy(nfr: np.ndarray, nuc: np.ndarray, p_short: list[int]):
+    pass
 
 
 def smooth(x: np.ndarray, gaussian, gaussian_norm):
@@ -92,33 +93,74 @@ class Occupancy:
 
         return pd.concat([bed, self.data], axis=1)
 
+    def threshold(self, th=None):
+        if th is None:
+            th = self.options.nfr_threshold
 
-def occ_from_fragments(fragments: Fragments, options: Options = None) -> Occupancy:
-    if options is None:
-        options = Options()
+        coords = nonzero_intervals(self.data["occ"] > th)
 
-    nfr, nuc = bin_and_split_fragments(fragments, options.bin_size, options.nfr_cutoff)
+        r = self.range
 
-    nfr_windows = rolling_window(nfr, options.window_size)
-    nuc_windows = rolling_window(nuc + options.pseudocount, options.window_size)
+        for i, (start, stop) in enumerate(coords):
+            name = f"{r.chr}:{r.start}-{r.end}" if r.name == "." else r.name
 
-    occ = calculate_occupancy(nfr_windows, nuc_windows, options.nfr_ratio)
-    smoothed = smooth(occ, options.gaussian, options.gaussian_norm)
+            yield Range(
+                r.chr,
+                r.start + self.options.bin_size*(start),
+                r.start + self.options.bin_size*stop - 1,
+                f"{name}:NFR{i+1}",
+                np.max(self.data["occ"].values[start:stop]),
+                "."
+            )
 
-    s = options.shift
+    @classmethod
+    def from_fragments(cls, fragments: Fragments, opts: Options=None):
+        return cls.from_binned_fragments(
+            BinnedFragments.from_fragments(fragments, opts)
+        )
 
-    data = pd.DataFrame({
-        "nfr": nfr[2*s:-2*s],
-        "nuc": nuc[2*s:-2*s],
-        "occ": occ[s:-s],
-        "smooth": smoothed,
-    })
+    @classmethod
+    def from_binned_fragments(cls, fragments: BinnedFragments, opts: Options=None):
+        opts = Options.check(fragments.opts, opts)
 
-    shift_bp = 2 * s * options.bin_size
+        nfr_windows = rolling_window(fragments.nfr, opts.window_size)
+        nuc_windows = rolling_window(fragments.nuc + opts.pseudocount, opts.window_size)
 
-    # if we are clipping data, we should clip range
-    return Occupancy(
-        fragments.range.extend(-shift_bp),
-        data,
-        options,
-    )
+        raw_occ = linear_occupancy(nfr_windows, nuc_windows, opts.nfr_ratio)
+        smoothed = smooth(raw_occ, opts.gaussian, opts.gaussian_norm)
+
+        s = opts.shift
+
+        data = pd.DataFrame({
+            "nfr": fragments.nfr[2*s:-2*s],
+            "nuc": fragments.nuc[2*s:-2*s],
+            "raw_occ": raw_occ[s:-s],
+            "occ": smoothed,
+        })
+
+        shift_bp = 2 * s * opts.bin_size
+
+        r = replace(
+            fragments.range.extend(-shift_bp),
+            score = np.max(smoothed)
+        )
+
+        return cls(
+            r,
+            data,
+            opts,
+        )
+    
+    @classmethod
+    def from_bigwig(cls, bw, r: Range, opts: Options=None):
+        opts = Options.check(opts)
+    
+        bins = bw.intervals(r.chr, r.start, r.end)
+        occ = np.array([b[2] for b in bins])
+        
+        return Occupancy(
+            replace(r, score=np.max(occ)),
+            pd.DataFrame({"occ": occ}),
+            opts
+        )
+
