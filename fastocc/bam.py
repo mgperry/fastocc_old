@@ -87,12 +87,12 @@ class BamFragments(FragmentLoader):
     def __getitem__(self, i) -> Fragments:
         r_ext = self.ranges[i].extend(2*self.opts.shift*self.opts.bin_size) # extend for windowing // smoothing
         reads = self.bam.fetch(r_ext.extend(self.opts.max_insert//2)) # capture long fragments
-        nfr, nuc = process_bam_reads(reads, self.opts)
+        midpoint, size = process_bam_reads(reads, self.opts)
 
         return Fragments(
             r_ext,
-            nfr,
-            nuc,
+            midpoint,
+            size,
             self.opts
         )
     

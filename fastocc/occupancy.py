@@ -130,7 +130,7 @@ class Occupancy:
     @classmethod
     def from_fragments(cls, fragments: Fragments, opts: Options=None):
         opts = get_options(fragments.opts, opts)
-        return cls.from__binned_fragments(BinnedFragments.from_fragments(fragments), opts)
+        return cls.from_binned_fragments(fragments.bin(opts))
 
     @classmethod
     def from_binned_fragments(cls, fragments: BinnedFragments, opts: Options=None):
