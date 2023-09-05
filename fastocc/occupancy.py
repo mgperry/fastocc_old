@@ -4,7 +4,9 @@ from typing import Iterator
 import numpy as np
 import pandas as pd
 
-from .options import Options
+import pyBigWig
+
+from .options import Options, get_options
 from .fragments import Fragments, BinnedFragments
 from .range import Range
 
@@ -61,7 +63,14 @@ def linear_occupancy(nfr: np.ndarray, nuc: np.ndarray, nfr_ratio: int):
     return occ.clip(max=1)
 
 def mixture_occupancy(nfr: np.ndarray, nuc: np.ndarray, p_short: list[int]):
-    pass
+
+    m = 1 / (p_short[1] - p_short[0])
+    c = - (p_short[0] * m)
+
+    occ = c + m * (nfr / (nfr + nuc))
+
+    # occupancy is between 1 and zero
+    return occ.clip(min=0, max=1)
 
 
 def smooth(x: np.ndarray, gaussian, gaussian_norm):
@@ -75,6 +84,11 @@ def smooth(x: np.ndarray, gaussian, gaussian_norm):
     smoothed = np.convolve(gaussian, x, mode = 'valid')
 
     return smoothed / gaussian_norm
+
+
+def fetch_bw(r: Range, bw):
+    bins = bw.intervals(r.chr, r.start, r.end)
+    return np.array([b[2] for b in bins])
 
 
 @dataclass
@@ -115,13 +129,12 @@ class Occupancy:
 
     @classmethod
     def from_fragments(cls, fragments: Fragments, opts: Options=None):
-        return cls.from_binned_fragments(
-            BinnedFragments.from_fragments(fragments, opts)
-        )
+        opts = get_options(fragments.opts, opts)
+        return cls.from__binned_fragments(BinnedFragments.from_fragments(fragments), opts)
 
     @classmethod
     def from_binned_fragments(cls, fragments: BinnedFragments, opts: Options=None):
-        opts = Options.check(fragments.opts, opts)
+        opts = get_options(fragments.opts, opts)
 
         nfr_windows = rolling_window(fragments.nfr, opts.window_size)
         nuc_windows = rolling_window(fragments.nuc + opts.pseudocount, opts.window_size)
@@ -135,7 +148,7 @@ class Occupancy:
             "nfr": fragments.nfr[2*s:-2*s],
             "nuc": fragments.nuc[2*s:-2*s],
             "raw_occ": raw_occ[s:-s],
-            "occ": smoothed,
+            "occ": smoothed
         })
 
         shift_bp = 2 * s * opts.bin_size
@@ -153,8 +166,9 @@ class Occupancy:
     
     @classmethod
     def from_bigwig(cls, bw, r: Range, opts: Options=None):
-        opts = Options.check(opts)
+        opts = get_options(opts)
     
+        # TODO should check that intervals are the right size
         bins = bw.intervals(r.chr, r.start, r.end)
         occ = np.array([b[2] for b in bins])
         

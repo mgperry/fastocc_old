@@ -1,9 +1,10 @@
 from dataclasses import dataclass, replace
 from typing_extensions import Self
+import os
+
 from pybedtools import BedTool
 
-from .io import write_chrom_sizes
-from .options import Options
+from .options import Options, get_options
 
 
 @dataclass(frozen=True)
@@ -67,6 +68,16 @@ class Range:
         return self.end - self.start + 1
 
 
+def write_chrom_sizes(chrom_sizes: dict[str, int], f):
+    """
+    Write chromosome sizes to a file in UCSC format. Format is the same as
+    the output of `fetch_chrom_sizes`, ie [("chr1", 248956422), ...]
+    """
+    for chr, size in chrom_sizes.items():
+        f.write(f"{chr}\t{size}\n")
+
+
+@dataclass
 class BedFile:
     """
     Class to represent a list of ranges as a BED file on disk, saving memory, and also
@@ -83,15 +94,18 @@ class BedFile:
         for i in self.bed:
             score = i.score if i.score != "." else 0
             r = Range(i.chrom, i.start+1, i.end, i.name, score, i.strand)
-            return r.align(self.opts.bin_size)
+            yield r.align(self.opts.bin_size)
 
     @classmethod
     def from_bed(cls, bed: str, chrom_info: dict[str, int], opts: Options=None):
-        opts = Options.check(opts)
+        opts = get_options(opts)
 
         with open(".chrom_info", 'w') as genome:
             write_chrom_sizes(chrom_info, genome)
-            fixed = BedTool(bed).slop(l=opts.extend, r=opts.extend, g=genome).sort(g=genome).merge(d=opts.merge)
+        
+        fixed = BedTool(bed).slop(l=opts.extend, r=opts.extend, g=".chrom_info").sort(g=".chrom_info").merge(d=opts.merge)
+
+        os.unlink(".chrom_info")
 
         return cls(
             fixed,
@@ -106,7 +120,7 @@ class BedFile:
         NB chromsizes are created in order, so no need to pipe into sort and so we
         avoid PR#380
         """
-        opts = Options.check(opts)
+        opts = get_options(opts)
 
         g = {chr: (0, end) for chr, end in chrom_info}
         windows = BedTool().set_chromsizes(g).window_maker(w=size)
@@ -115,4 +129,4 @@ class BedFile:
             windows,
             opts
         )
-
+    

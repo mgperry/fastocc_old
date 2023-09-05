@@ -1,5 +1,6 @@
-from .fastocc import occ, nfr
+from . import io
 
-from .range import Range
-from .occupancy import calculate_occupancy
-from .split import threshold_occupancy
+from .range import Range, BedFile
+from .occupancy import Occupancy
+from .fragments import Fragments, BinnedFragments, BamFragments
+from .options import Options

@@ -1,46 +1,10 @@
-
 import csv
 import sys
 from dataclasses import astuple
 
-import numpy as np
-
-import pysam
 import pyBigWig
 
 from .range import Range
-
-
-def fetch_safe(bam: pysam.AlignmentFile, r: Range):
-    """
-    Wraps pysam.AlignmentFile.fetch so it doesn't fail on out-of-bounds ranges.
-    """
-    max_len = bam.header.get_reference_length(r.chr)
-    return bam.fetch(r.chr, max(r.start, 1), min(r.end, max_len))
-
-
-def fetch_chrom_sizes(h: pysam.AlignmentHeader) -> dict[str, int]:
-    """
-    Extract chromosome sizes from BAM header (via pysam).
-
-    h["SQ"] => [{"SN": "chr1", "LN", 248956422}, ...]
-    output => {"chr1": 248956422, ...}
-    """
-    return {seq["SN"]: seq["LN"] for seq in h['SQ']}
-
-
-def fetch_bw(r: Range, bw):
-    bins = bw.intervals(r.chr, r.start, r.end)
-    return np.array([b[2] for b in bins])
-
-
-def write_chrom_sizes(chrom_sizes: dict[str, int], f):
-    """
-    Write chromosome sizes to a file in UCSC format. Format is the same as
-    the output of `fetch_chrom_sizes`, ie [("chr1", 248956422), ...]
-    """
-    for chr, size in chrom_sizes.items():
-        f.write(f"{chr}\t{size}\n")
 
 
 class BigWigWriter:

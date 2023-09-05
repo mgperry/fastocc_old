@@ -1,14 +1,12 @@
-import sys
 import click
 
-import pysam
 import pyBigWig
 
 from .range import BedFile
 from .occupancy import Occupancy
 from .options import Options
-from .fragments import BamFragments
-from .io import BigWigWriter, BedGraphWriter, BEDWriter, fetch_chrom_sizes
+from .bam import BamFragments
+from .io import BigWigWriter, BedGraphWriter, BEDWriter
 
 
 @click.group()
@@ -31,21 +29,10 @@ def occ(bam: str, bed: str, output: str, format: str, pseudocount: float):
     if format == "bigwig" and output == "-":
         raise click.UsageError("Output must be a file if output format is bigwig")
 
-    bam_file = pysam.AlignmentFile(bam)
-
-    if not bam_file.has_index():
-        print("No BAM index found, indexing BAM file...", file=sys.stderr)
-        pysam.index(bam_file.filename)
-        bam_file = pysam.AlignmentFile(bam) # reload index
-
-    chrom_sizes = fetch_chrom_sizes(bam_file.header)
-
-    ranges = BedFile(bed, chrom_sizes, opts)
-
-    fragments = BamFragments(bam_file, ranges, opts)
+    fragments = BamFragments.load(bam, bed, opts)
 
     if format == "bigwig":
-        writer = BigWigWriter(output, header=chrom_sizes)
+        writer = BigWigWriter(output, header=fragments.chrom_info)
     else:
         writer = BedGraphWriter(output)
     
@@ -71,6 +58,7 @@ def nfr(bigwig: str, bed: str, output: str, threshold: float = 0.6, merge: bool=
 
     # I think this is required to avoid getting NAs from the bigwig file
     # TODO should just default to zero
+    # or do we even want this? we should merge but not extend, that's what's asked for
     if not merge:
         opts.extend = 0
         opts.merge = 0
