@@ -94,24 +94,30 @@ def fetch_bw(r: Range, bw):
 @dataclass
 class Occupancy:
     range: Range
-    data: pd.DataFrame
-    options: Options
+    nfr: np.ndarray
+    nuc: np.ndarray
+    occ: np.ndarray
+    opts: Options
 
     def to_data_frame(self) -> pd.DataFrame:
-        bins = self.range.make_bins(self.options.bin_size)
+        bins = self.range.make_bins(self.opts.bin_size)
 
         bed = pd.DataFrame(
             [(r.chr, r.start, r.end) for r in bins],
             columns=["chr", "start", "end"]
         )
 
-        return pd.concat([bed, self.data], axis=1)
+        bed["nfr"] = self.nfr
+        bed["nuc"] = self.nuc
+        bed["occ"] = self.occ
+
+        return bed
 
     def threshold(self, th=None):
         if th is None:
-            th = self.options.nfr_threshold
+            th = self.opts.nfr_threshold
 
-        coords = nonzero_intervals(self.data["occ"] > th)
+        coords = nonzero_intervals(self.occ > th)
 
         r = self.range
 
@@ -120,16 +126,15 @@ class Occupancy:
 
             yield Range(
                 r.chr,
-                r.start + self.options.bin_size*(start),
-                r.start + self.options.bin_size*stop - 1,
+                r.start + self.opts.bin_size*(start),
+                r.start + self.opts.bin_size*stop - 1,
                 f"{name}:NFR{i+1}",
-                np.max(self.data["occ"].values[start:stop]),
+                np.max(self.occ.values[start:stop]),
                 "."
             )
 
     @classmethod
     def from_fragments(cls, fragments: Fragments, opts: Options=None):
-        opts = get_options(fragments.opts, opts)
         return cls.from_binned_fragments(fragments.bin(opts))
 
     @classmethod
@@ -148,13 +153,6 @@ class Occupancy:
 
         s = opts.shift
 
-        data = pd.DataFrame({
-            "nfr": fragments.nfr[2*s:-2*s],
-            "nuc": fragments.nuc[2*s:-2*s],
-            "raw_occ": raw_occ[s:-s],
-            "occ": smoothed
-        })
-
         shift_bp = 2 * s * opts.bin_size
 
         r = replace(
@@ -164,7 +162,9 @@ class Occupancy:
 
         return cls(
             r,
-            data,
+            fragments.nfr[2*s:-2*s],
+            fragments.nuc[2*s:-2*s],
+            smoothed,
             opts,
         )
     
@@ -178,7 +178,9 @@ class Occupancy:
         
         return Occupancy(
             replace(r, score=np.max(occ)),
-            pd.DataFrame({"occ": occ}),
+            None,
+            None,            
+            occ,
             opts
         )
 

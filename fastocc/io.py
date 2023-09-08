@@ -22,7 +22,7 @@ class BigWigWriter:
 
 
 class BedGraphWriter:
-    header = ["chr", "start", "end", "nfr", "nuc", "raw_occ", "occ"]
+    header = ["chr", "start", "end", "nfr", "nuc", "occ"]
 
     def __init__(self, f):
         if f == "-":
