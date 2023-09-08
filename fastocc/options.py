@@ -29,6 +29,7 @@ class Options:
     gaussian_sd: float = 2.
     nfr_cutoff: int = 119 # threshold above which reads are considered to come from nucleosomes
     nfr_ratio: float = 1.22 # ratio of overall NFR reads to reads < nfr_cutoff
+    method: str = "linear"
     p_short: tuple[float] = (0.2, 0.95)
     pseudocount: int = 1 # can be float probably
     nfr_threshold: float = 0.6

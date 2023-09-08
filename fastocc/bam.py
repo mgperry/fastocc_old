@@ -1,4 +1,5 @@
 import sys
+from typing import Iterator
 
 import pysam
 import numpy as np
@@ -18,7 +19,6 @@ def fetch_chrom_sizes(h: pysam.AlignmentHeader) -> dict[str, int]:
     return {seq["SN"]: seq["LN"] for seq in h['SQ']}
 
 
-# TODO this actually should be a function I think
 def process_bam_reads(reads, opts: Options) -> Fragments:
     """
     Reconstruct full-length ATAC-seq fragments from a bam file. Filters for the first
@@ -78,23 +78,23 @@ class Bam:
 
 
 class BamFragments(FragmentLoader):
-    def __init__(self, ranges: list[Range], bam: Bam, opts: Options=None) -> None:
+    def __init__(self, bam: Bam, ranges: Iterator[Range], opts: Options=None) -> None:
         self.opts = get_options(opts)
-        self.chrom_info = fetch_chrom_sizes(bam)
         self.ranges = ranges
         self.bam = bam
 
-    def __getitem__(self, i) -> Fragments:
-        r_ext = self.ranges[i].extend(2*self.opts.shift*self.opts.bin_size) # extend for windowing // smoothing
-        reads = self.bam.fetch(r_ext.extend(self.opts.max_insert//2)) # capture long fragments
-        midpoint, size = process_bam_reads(reads, self.opts)
+    def __iter__(self):
+        for r in self.ranges:
+            r_ext = r.extend(2*self.opts.shift*self.opts.bin_size) # extend for windowing // smoothing
+            reads = self.bam.fetch(r_ext.extend(self.opts.max_insert//2)) # capture long fragments
+            midpoint, size = process_bam_reads(reads, self.opts)
 
-        return Fragments(
-            r_ext,
-            midpoint,
-            size,
-            self.opts
-        )
+            yield Fragments(
+                r_ext,
+                midpoint,
+                size,
+                self.opts
+            )
     
     @classmethod
     def load(cls, bam: str, bed: str, opts: Options, index=True):

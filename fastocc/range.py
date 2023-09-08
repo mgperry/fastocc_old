@@ -1,4 +1,4 @@
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, astuple
 from typing_extensions import Self
 import os
 
@@ -59,6 +59,9 @@ class Range:
             Range(self.chr, start=s, end=s + bin_size - 1)
             for s in starts
         ]
+
+    def to_bed(self) -> tuple:
+        return astuple(replace(self, start=self.start-1))
 
     def __len__(self) -> int:
         """

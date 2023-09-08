@@ -1,13 +1,9 @@
 import numpy as np
 import h5py
 import pandas as pd
-from pybedtools import BedTool
 
 from .range import Range
-from .fragments import Fragments, FragmentSource
-from . import io
-from .options import Options
-from .occupancy import calculate_occupancy
+from .fragments import Fragments
 
 
 def load_fragments(chr: h5py.Group):
@@ -38,7 +34,7 @@ def fragments_from_chr(chr, cell):
     })
 
 
-class ArrowFragments(FragmentSource):
+class ArrowFragments:
     """
     Read all fragments from a subset of cells into memory, reading the file once. 
     """

@@ -139,7 +139,11 @@ class Occupancy:
         nfr_windows = rolling_window(fragments.nfr, opts.window_size)
         nuc_windows = rolling_window(fragments.nuc + opts.pseudocount, opts.window_size)
 
-        raw_occ = linear_occupancy(nfr_windows, nuc_windows, opts.nfr_ratio)
+        if opts.method == "linear":
+            raw_occ = linear_occupancy(nfr_windows, nuc_windows, opts.nfr_ratio)
+        elif opts.method == "mixture":
+            raw_occ = mixture_occupancy(nfr_windows, nuc_windows, opts.p_short)
+
         smoothed = smooth(raw_occ, opts.gaussian, opts.gaussian_norm)
 
         s = opts.shift

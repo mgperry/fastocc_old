@@ -1,6 +1,5 @@
 import csv
 import sys
-from dataclasses import astuple
 
 import pyBigWig
 
@@ -16,14 +15,14 @@ class BigWigWriter:
         self.file.addEntries(
             occ.range.chr,
             occ.range.start-1,
-            values=occ.data["smooth"].values.tolist(),
+            values=occ.data["occ"].values.tolist(),
             span=occ.options.bin_size,
             step=occ.options.bin_size,
         )
 
 
 class BedGraphWriter:
-    header = ["chr", "start", "end", "nfr", "nuc", "window", "smooth"]
+    header = ["chr", "start", "end", "nfr", "nuc", "raw_occ", "occ"]
 
     def __init__(self, f):
         if f == "-":
@@ -44,17 +43,24 @@ class BedGraphWriter:
 
 
 class BEDWriter:
-    def __init__(self, f):
+    """
+    Class to write Ranges to a BED file.
+    """
+    def __init__(self, fh):
+        self.writer = csv.writer(fh, delimiter="\t")
+
+    def write(self, r: Range):
+        self.writer.writerow(r.to_bed())
+
+    def writerows(self, ranges: list[Range]):
+        for r in ranges:
+            self.write(r)
+
+    @classmethod
+    def open(cls, f: str):
         if f == "-":
             fh = sys.stdout
         else:
             fh = open(f, 'w')
 
-        self.writer = csv.writer(fh, delimiter="\t")
-
-    def write(self, r: Range):
-        self.writer.writerow(astuple(r))
-
-    def writerows(self, ranges: list[Range]):
-        for r in ranges:
-            self.write(r)
+        return cls(fh)
