@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import numpy as np
+import pandas as pd
 
 from .range import Range
 from .options import Options, get_options
@@ -11,6 +12,19 @@ class BinnedFragments:
     nfr: np.ndarray
     nuc: np.ndarray
     opts: Options = None
+
+    def to_data_frame(self) -> pd.DataFrame:
+        bins = self.range.make_bins(self.opts.bin_size)
+
+        bed = pd.DataFrame(
+            [(r.chr, r.start, r.end) for r in bins],
+            columns=["chr", "start", "end"]
+        )
+
+        bed["nfr"] = self.nfr
+        bed["nuc"] = self.nuc
+
+        return bed
 
 
 @dataclass
