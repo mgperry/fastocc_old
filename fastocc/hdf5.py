@@ -18,6 +18,7 @@ def write_datasets(grp: h5py.Group, datasets: dict[str, np.ndarray], **kwargs):
 class HDF5Writer:
     compression = "gzip"
     chunks = 10000
+    scaleoffset = 2 # decimal places for floats
 
     def __init__(self, file: h5py.File, schema: dict, opts=None, genome_info=None):
         self.file = file
@@ -55,6 +56,13 @@ class HDF5Writer:
             chunks = min(total, self.chunks)
 
             write_datasets(grp, ranges)
+
+            # write float arrays with scaleoffset
+            for col, type in zip(self.schema["cols"], self.schema["types"]):
+                if type[:5] == "float" and self.scaleoffset:
+                    grp.create_dataset(col, data=data[col], chunks=chunks, scaleoffset=self.scaleoffset)
+                    data.pop(col)
+
             write_datasets(grp, data, chunks=chunks, compression="gzip")
 
             print(f"{chr} written.")
@@ -92,6 +100,10 @@ class HDF5Writer:
 
         return ranges, data
 
+    @classmethod
+    def open(cls, f: str, *args, **kwargs):
+        return cls(h5py.File(f, 'w'), *args, **kwargs)
+
 
 class HDF5Loader:
     data_group = "chromosomes"
@@ -119,8 +131,8 @@ class HDF5Loader:
             self.opts = None
 
     @classmethod
-    def open(cls, f: str, **kwargs):
-        return cls(h5py.File(f, 'r'), **kwargs)
+    def open(cls, f: str, *args, **kwargs):
+        return cls(h5py.File(f, 'r'), *args, **kwargs)
 
     def load(self):
         for chr in self.file[self.data_group]:

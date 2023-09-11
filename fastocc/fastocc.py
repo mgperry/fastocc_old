@@ -7,6 +7,7 @@ from .occupancy import Occupancy
 from .options import Options
 from .bam import BamFragments
 from .io import BigWigWriter, BedGraphWriter, BEDWriter
+from .hdf5 import HDF5Writer
 
 
 @click.group()
@@ -39,6 +40,26 @@ def occ(bam: str, bed: str, output: str, format: str, pseudocount: float):
     for frags in fragments:
         occupancy = Occupancy.from_fragments(frags)
         writer.write(occupancy)
+
+
+@click.command()
+@click.option("--bam", help="BAM file containing ATAC-seq reads", required=True, type=str)
+@click.option("--bed", help="BED file containing ranges.", type=str)
+@click.option("-o", "--output", help="Output file location.", type=str)
+def fragments(bam: str, bed: str, output: str):
+    opts = Options()
+
+    fragments = BamFragments.load(bam, bed, opts)
+
+    schema = {
+        "cols": ["nfr", "nuc", "occ"],
+        "types": ["int16", "int16", "float32"],
+        "bin_size": opts.bin_size
+    }
+
+    writer = HDF5Writer.open(output, schema, opts, fragments.bam.chrom_info)
+
+    writer.write(Occupancy.from_fragments(fs) for fs in fragments)
 
 
 @click.command
@@ -74,4 +95,5 @@ def nfr(bigwig: str, bed: str, output: str, threshold: float = 0.6, merge: bool=
 
 
 fastocc.add_command(occ)
+fastocc.add_command(fragments)
 fastocc.add_command(nfr)
