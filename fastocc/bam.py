@@ -53,7 +53,7 @@ class Bam:
     def __init__(self, bam: pysam.AlignmentFile, index=True):
         if index and not bam.has_index():
             print("No BAM index found, indexing BAM file...", file=sys.stderr)
-            fn = bam.filename
+            fn = bam.filename.decode()
             bam.close()
 
             pysam.index(fn)
