@@ -1,6 +1,7 @@
 from dataclasses import dataclass, replace, astuple
 from typing_extensions import Self
 import os
+from tempfile import NamedTemporaryFile
 
 from pybedtools import BedTool
 
@@ -78,6 +79,8 @@ def write_chrom_sizes(chrom_sizes: dict[str, int], f):
     """
     for chr, size in chrom_sizes.items():
         f.write(f"{chr}\t{size}\n")
+    
+    f.flush()
 
 
 @dataclass
@@ -100,15 +103,13 @@ class BedFile:
             yield r.align(self.opts.bin_size)
 
     @classmethod
-    def from_bed(cls, bed: str, chrom_info: dict[str, int], opts: Options=None):
+    def open(cls, bed: str, chrom_info: dict[str, int], opts: Options=None):
         opts = get_options(opts)
 
-        with open(".chrom_info", 'w') as genome:
+        with NamedTemporaryFile('w') as genome:
             write_chrom_sizes(chrom_info, genome)
         
-        fixed = BedTool(bed).slop(l=opts.extend, r=opts.extend, g=".chrom_info").sort(g=".chrom_info").merge(d=opts.merge)
-
-        os.unlink(".chrom_info")
+            fixed = BedTool(bed).slop(l=opts.extend, r=opts.extend, g=genome.name).sort(g=genome.name).merge(d=opts.merge)
 
         return cls(
             fixed,

@@ -129,7 +129,7 @@ class Occupancy:
                 r.start + self.opts.bin_size*(start),
                 r.start + self.opts.bin_size*stop - 1,
                 f"{name}:NFR{i+1}",
-                np.max(self.occ.values[start:stop]),
+                np.max(self.occ[start:stop]),
                 "."
             )
 

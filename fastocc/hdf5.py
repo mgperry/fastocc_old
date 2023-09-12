@@ -4,6 +4,7 @@ import numpy as np
 from itertools import groupby
 from dataclasses import asdict
 
+from .options import Options
 from .range import Range
 
 def count_bins(r: Range, size):
@@ -135,8 +136,15 @@ class HDF5Loader:
         return cls(h5py.File(f, 'r'), *args, **kwargs)
 
     def load(self):
-        for chr in self.file[self.data_group]:
-            yield from self.decode(chr)
+        # this maintains correct order if chrom_info is available
+        if self.chrom_info:
+            for chr in self.chrom_info:
+                if chr in self.file[self.data_group]:
+                    yield from self.decode(chr)
+        # fall back to iterating over group
+        else:
+            for chr in self.file[self.data_group]:
+                yield from self.decode(chr)
 
     def decode(self, chr):
         grp = self.file[self.data_group][chr]
@@ -162,7 +170,7 @@ class HDF5Loader:
                 args = {
                     "range": ranges[i],
                     **data,
-                    "opts": self.opts
+                    "opts": Options(**self.opts)
                 }
 
                 yield self.cls(**args)

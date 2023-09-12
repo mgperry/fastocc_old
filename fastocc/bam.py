@@ -100,7 +100,7 @@ class BamFragments(FragmentLoader):
     def load(cls, bam: str, bed: str, opts: Options, index=True):
         bam_file = Bam.open(bam, index=index)
 
-        ranges = BedFile.from_bed(bed, bam_file.chrom_info, opts)
+        ranges = BedFile.open(bed, bam_file.chrom_info, opts)
 
         return cls(bam_file, ranges, opts)
 

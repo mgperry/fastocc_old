@@ -84,9 +84,9 @@ def nfr(bigwig: str, bed: str, output: str, threshold: float = 0.6, merge: bool=
         opts.extend = 0
         opts.merge = 0
 
-    ranges = BedFile(bed, chrom_sizes, opts)
+    ranges = BedFile.open(bed, chrom_sizes, opts)
 
-    writer = BEDWriter(output)
+    writer = BEDWriter.open(output)
 
     for r in ranges:
         occupancy = Occupancy.from_bigwig(bw, r, opts)
