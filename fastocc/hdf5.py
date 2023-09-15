@@ -127,7 +127,7 @@ class HDF5Loader:
             }
 
         if "opts" in meta:
-            self.opts = dict(meta["opts"].attrs)
+            self.opts = Options(**meta["opts"].attrs)
         else:
             self.opts = None
 
@@ -135,7 +135,7 @@ class HDF5Loader:
     def open(cls, f: str, *args, **kwargs):
         return cls(h5py.File(f, 'r'), *args, **kwargs)
 
-    def load(self):
+    def __iter__(self):
         # this maintains correct order if chrom_info is available
         if self.chrom_info:
             for chr in self.chrom_info:
@@ -153,31 +153,28 @@ class HDF5Loader:
             Range(chr, s, e) for s, e in zip(grp["start"], grp["end"])
         ]
 
+        # only load relevant fields
+        if self.cls and hasattr(self.cls, "__dataclass_fields__"):
+            cols = [col for col in self.schema["cols"] if col in self.cls.__dataclass_fields__]
+        else:
+            cols = self.schema["cols"]
+
         # load info to avoid chunk nonsense
-        datasets = {col: grp[col][:] for col in self.schema["cols"]}
+        datasets = {col: grp[col][:] for col in cols}
 
         start = 0
 
-        for i, n in enumerate(grp["bins"][:]):
+        for r, n in zip(ranges, grp["bins"][:]):
             end = start + n
 
-            data = {}
+            data = {"range": r}
 
-            for col in self.schema["cols"]:
+            for col in cols:
                 data[col] = datasets[col][start:end]
 
             if self.cls:
-                args = {
-                    "range": ranges[i],
-                    **data,
-                    "opts": Options(**self.opts)
-                }
-
-                yield self.cls(**args)
+                yield self.cls(**(data | {"opts": self.opts}))
             else:
-                yield {
-                    "range": ranges[i],
-                    "data": data
-                }
+                yield data
 
             start = end

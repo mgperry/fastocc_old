@@ -35,7 +35,7 @@ class Options:
     nfr_threshold: float = 0.6
 
     def __post_init__(self):
-        self.shift = self.bin_size // 2
+        self.shift = self.window_size // 2
         self.gaussian = gaussian(self.window_size, self.gaussian_sd)
         self.gaussian_norm = np.convolve(self.gaussian, np.ones(self.window_size), mode="valid")
 
