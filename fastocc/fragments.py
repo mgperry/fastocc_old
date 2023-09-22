@@ -72,6 +72,9 @@ class Fragments:
             opts
         )
 
+    def __len__(self):
+        return len(self.nfr)
+
 
 class FragmentLoader:
     """

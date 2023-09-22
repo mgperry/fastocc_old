@@ -45,28 +45,35 @@ class HDF5Writer:
         data_by_chr = groupby(range_data, key=lambda fs: fs.range.chr)
 
         for chr, windows in data_by_chr:
-            grp = self.file["chromosomes"].create_group(chr)
+            self.write_chr(chr, windows)
 
-            windows = list(windows) # don't exhaust iterator, mem in tiny anyway
+    def write_chr(self, chr, windows):
+        """
+        A chromosome is an atomic write because of how indexes are calculated and
+        the fact that windows are required in order.
+        """
+        grp = self.file["chromosomes"].create_group(chr)
 
-            ranges, data = self.encode(windows)
+        windows = list(windows) # don't exhaust iterator, mem in tiny anyway
 
-            # fix for empty // small chrs:
-            total = sum(ranges["bins"])
+        ranges, data = self.encode(windows)
 
-            chunks = min(total, self.chunks)
+        # fix for empty // small chrs:
+        total = sum(ranges["bins"])
 
-            write_datasets(grp, ranges)
+        chunks = min(total, self.chunks)
 
-            # write float arrays with scaleoffset
-            for col, type in zip(self.schema["cols"], self.schema["types"]):
-                if type[:5] == "float" and self.scaleoffset:
-                    grp.create_dataset(col, data=data[col], chunks=chunks, scaleoffset=self.scaleoffset)
-                    data.pop(col)
+        write_datasets(grp, ranges)
 
-            write_datasets(grp, data, chunks=chunks, compression="gzip")
+        # write float arrays with scaleoffset
+        for col, type in zip(self.schema["cols"], self.schema["types"]):
+            if type[:5] == "float" and self.scaleoffset:
+                grp.create_dataset(col, data=data[col], chunks=chunks, scaleoffset=self.scaleoffset)
+                data.pop(col)
 
-            print(f"{chr} written.")
+        write_datasets(grp, data, chunks=chunks, compression="gzip")
+
+        # print(f"{chr} written.")
 
     def encode(self, windows) -> (dict, dict):
         """
