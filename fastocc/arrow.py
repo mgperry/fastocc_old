@@ -4,60 +4,71 @@ import pandas as pd
 
 from .range import Range
 from .fragments import Fragments
+from .intersect import intersect_sorted
 
 
-def load_fragments(chr: h5py.Group):
-    return {k: v[:] for k, v in chr.items()}
+def load_cells(grp, ids=None):
+    """
+    NB cells are not order wrt `ids`, and can be missing.
+    """
 
+    # we cache this because indexing doesn't work with default archR compression
+    cells = grp["RGValues"][0, :]
+    n_frags = grp["RGLengths"][0, :]
 
-def fragments_from_chr(chr, cell):
+    ranges = grp["Ranges"][:]
     
-    is_correct_id = np.argwhere(chr["RGValues"][0,:] == cell.encode("ascii"))
+    start = 0
 
-    if len(is_correct_id) == 1:
-        index = is_correct_id.flatten()[0]
-    elif len(is_correct_id) == 0:
-        # not all chromosomes contain fragments from all cells
-        return pd.DataFrame({
-            "start": np.array([], dtype=int),
-            "size": np.array([], dtype=int),
-        })
-    else:
-        raise Exception("Cell ID should be unique.")
+    for cell, N in zip(cells, n_frags):
+        end = start + N
 
-    start = chr["RGLengths"][0,:index].sum()
-    end = start + chr["RGLengths"][0,index]
+        id = cell.decode('UTF-8')
 
-    return pd.DataFrame({
-        "start": chr["Ranges"][0, start:end],
-        "size": chr["Ranges"][1, start:end],
+        if ids is None or id in ids:
+            yield {
+                "id": id,
+                "start": ranges[0, start:end],
+                "size": ranges[1, start:end],
+            }
+    
+        start = end
+
+
+def fragments(cell, ranges: list[Range]):
+    df = pd.DataFrame({
+        "start": cell["start"],
+        "size": cell["size"]
     })
 
+    df["midpoint"] = df["start"] + df["size"] // 2
+    df = df.sort_values("midpoint")
 
-class ArrowFragments:
-    """
-    Read all fragments from a subset of cells into memory, reading the file once. 
-    """
-    def __init__(self, arrow, cells):
-        frags = {}
+    for r, (a, b) in intersect_sorted(df["midpoint"].values, ranges):
+        fs = Fragments(
+            r, 
+            df["midpoint"].values[a:b],
+            df["size"].values[a:b]
+        )
 
-        # load all fragments for chosen cells into memory
-        for chr in arrow["Fragments"]:
-            data = load_fragments(arrow["Fragments"][chr])
+        fs.cell = cell.get("id", None)
 
-            frags_by_cell = [fragments_from_chr(data, cell) for cell in cells]
+        yield fs
 
-            frags[chr] = self.sort_by_midpoint(pd.concat(frags_by_cell))
 
-        self.frags = frags
-        self.cells = cells
+def merge_cells(cells: list[str], id=None):
+    dfs = []
 
-    @staticmethod
-    def sort_by_midpoint(df: pd.DataFrame):
-        df["midpoint"] = df["start"] + df["size"] // 2
-        return df.sort_values("midpoint")
+    for cell in cells:
+        dfs.append(pd.DataFrame({
+            "start": cell["start"],
+            "size": cell["size"]
+        }))
 
-    def fetch(self, r: Range) -> Fragments:
-        idx = np.searchsorted(self.frags[r.chr]["midpoint"], [r.start, r.end])
-        df = self.frags[r.chr].iloc[idx[0]:idx[1]]
-        return Fragments(r, df["midpoint"].values, df["size"].values)
+    cluster_df = pd.concat(dfs)
+
+    return {
+        "id": id,
+        "start": cluster_df["start"].values,
+        "size": cluster_df["size"].values,
+    }
