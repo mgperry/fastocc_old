@@ -1,7 +1,9 @@
-import numpy as np
 import h5py
 import pandas as pd
+from typing import Iterable
+from itertools import groupby
 
+from .options import Options, get_options
 from .range import Range
 from .fragments import Fragments
 from .intersect import intersect_sorted
@@ -72,3 +74,34 @@ def merge_cells(cells: list[str], id=None):
         "start": cluster_df["start"].values,
         "size": cluster_df["size"].values,
     }
+
+
+def load_arrow_chr(
+        arrow: h5py.File,
+        ranges: Iterable[Range],
+        chr: str,
+        cell_ids: list[str] = None,
+        opts: Options = None,
+        h5_group: str="Fragments" # fragment location within arrow, "." is base
+):
+    opts = get_options(opts)
+
+    if not chr in arrow[h5_group]:
+        return []
+
+    cells = load_cells(arrow[h5_group][chr], cell_ids)
+
+    metacell = merge_cells(cells)
+
+    return [fs.bin() for fs in fragments(metacell, ranges)]
+
+
+def load_arrow(
+        arrow: h5py.File,
+        ranges: Iterable[Range],
+        cell_ids: list[str] = None,
+        opts: Options = None,
+        h5_group: str="Fragments" # fragment location within arrow, "." is base
+):
+    for chr, rs in groupby(ranges, lambda r: r.chr):
+        yield load_arrow_chr(arrow, rs, chr, cell_ids, opts, h5_group)
