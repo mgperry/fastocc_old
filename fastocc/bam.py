@@ -27,23 +27,32 @@ def process_bam_reads(reads, opts: Options) -> Fragments:
     """
     # q = r.extend(self.opts.max_insert//2) # this is to capture long fragments
 
-    midpoint = []
+    start = []
     size = []
 
     for read in reads:
         if read.is_proper_pair and not read.is_reverse:
-            #get left position
-            left_insertion = read.pos + 4
-            # insert size corrected by 8 base pairs to be insertion to insertion
-            frag_size = read.template_length - 8
+            if opts.shift_atac:
+                #get left position
+                left_insertion = read.pos + 4
+                # insert size corrected by 8 base pairs to be insertion to insertion
+                frag_size = read.template_length - 8
+            else:
+                left_insertion = read.pos
+                frag_size = read.template_length
 
             if frag_size > opts.max_insert:
                 continue
 
-            midpoint.append(left_insertion + frag_size // 2)
+            start.append(left_insertion)
             size.append(frag_size)
 
-    return np.array(midpoint, dtype=int), np.array(size, dtype=int)
+    if opts.filter_duplicates:
+        unique = np.unique(np.column_stack([start, size]), axis=0)
+        start = unique[:,0]
+        size = unique[:,1]
+
+    return np.array(start, dtype=int), np.array(size, dtype=int)
 
 
 class Bam:
@@ -87,11 +96,11 @@ class BamFragments(FragmentLoader):
         for r in self.ranges:
             r_ext = r.extend(2*self.opts.shift*self.opts.bin_size) # extend for windowing // smoothing
             reads = self.bam.fetch(r_ext.extend(self.opts.max_insert//2)) # capture long fragments
-            midpoint, size = process_bam_reads(reads, self.opts)
+            start, size = process_bam_reads(reads, self.opts)
 
             yield Fragments(
                 r_ext,
-                midpoint,
+                start,
                 size,
                 self.opts
             )

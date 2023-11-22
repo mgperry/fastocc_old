@@ -33,6 +33,8 @@ class Options:
     p_short: tuple[float] = (0.2, 0.95)
     pseudocount: int = 1 # can be float probably
     nfr_threshold: float = 0.6
+    shift_atac: bool = True
+    filter_duplicates: bool = True
 
     def __post_init__(self):
         self.shift = self.window_size // 2

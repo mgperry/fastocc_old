@@ -3,6 +3,7 @@ import numpy as np
 
 from itertools import groupby
 from dataclasses import asdict
+from pathlib import Path
 
 from .options import Options
 from .range import Range
@@ -35,6 +36,14 @@ class HDF5Writer:
         if opts:
             meta.create_group("opts")
             meta["opts"].attrs.update(asdict(opts))
+            self.bin_size = opts.bin_size
+        else:
+            bin_size = schema.get("bin_size", None)
+
+            if not bin_size:
+                raise ValueError("bin_size must be given in opts or schema")
+
+            self.bin_size = bin_size
 
         if genome_info:
             meta.create_group("genome_info")
@@ -82,7 +91,7 @@ class HDF5Writer:
         """
         rs = (w.range for w in windows)
         start, end, bins = zip(
-            *[(r.start, r.end, count_bins(r, self.schema["bin_size"])) for r in rs]
+            *[(r.start, r.end, count_bins(r, self.bin_size)) for r in rs]
         )
 
         total = sum(bins)
@@ -110,6 +119,9 @@ class HDF5Writer:
 
     @classmethod
     def open(cls, f: str, *args, **kwargs):
+        if Path(f).exists():
+            raise IOError(f"File {f} exists already, open manually to overwrite.")
+
         return cls(h5py.File(f, 'w'), *args, **kwargs)
 
 

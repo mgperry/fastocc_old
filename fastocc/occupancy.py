@@ -151,9 +151,9 @@ class Occupancy:
 
         smoothed = smooth(raw_occ, opts.gaussian, opts.gaussian_norm)
 
-        s = opts.shift
+        s2 = opts.shift * 2
 
-        shift_bp = 2 * s * opts.bin_size
+        shift_bp = s2 * opts.bin_size
 
         r = replace(
             fragments.range.extend(-shift_bp),
@@ -162,8 +162,8 @@ class Occupancy:
 
         return cls(
             r,
-            fragments.nfr[2*s:-2*s],
-            fragments.nuc[2*s:-2*s],
+            fragments.nfr[s2:-s2],
+            fragments.nuc[s2:-s2],
             smoothed,
             opts,
         )

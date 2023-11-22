@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import numpy as np
 import pandas as pd
 
@@ -33,7 +33,7 @@ class Fragments:
     Class to represent raw ATAC fragments from a single genomic interval.
     """
     range: Range
-    midpoint: np.ndarray
+    start: np.ndarray
     size: np.ndarray
     opts: Options = None
 
@@ -54,7 +54,8 @@ class Fragments:
         nfr = np.zeros(n_bins, dtype=np.intc)
         nuc = np.zeros(n_bins, dtype=np.intc)
 
-        bin = (self.midpoint - self.range.start + 1) // opts.bin_size
+        midpoint = self.start + self.size // 2
+        bin = (midpoint - self.range.start + 1) // opts.bin_size
 
         in_bounds = (bin >= 0) & (bin < n_bins)
 
@@ -69,6 +70,18 @@ class Fragments:
             self.range,
             nfr,
             nuc,
+            opts
+        )
+
+    def filter_by_max_size(self, max_size):
+        idx = self.size < max_size
+
+        opts = replace(self.opts, max_insert = max_size)
+
+        return Fragments(
+            self.range,
+            self.start[idx],
+            self.size[idx],
             opts
         )
 
