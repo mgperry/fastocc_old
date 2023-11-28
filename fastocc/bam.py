@@ -19,7 +19,7 @@ def fetch_chrom_sizes(h: pysam.AlignmentHeader) -> dict[str, int]:
     return {seq["SN"]: seq["LN"] for seq in h['SQ']}
 
 
-def process_bam_reads(reads, opts: Options) -> Fragments:
+def process_bam_reads(reads, opts: Options) -> tuple[np.ndarray,np.ndarray]:
     """
     Reconstruct full-length ATAC-seq fragments from a bam file. Filters for the first
     read of proper pairs, corrects the Tn5 insertion distance and returns the start and

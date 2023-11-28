@@ -49,7 +49,7 @@ def rolling_window(arr: np.ndarray, window_size: int):
     return np.sum(arr[index], 1)
 
 
-def linear_occupancy(nfr: np.ndarray, nuc: np.ndarray, nfr_ratio: int):
+def occupancy(nfr: np.ndarray, nuc: np.ndarray, opts):
     """
     Calculates nucleosome occupancy from a vector of nucleosome-free and nucleosomal 
     reads, based on the formula (NFR*1.22) / (NFR + NUC).
@@ -57,20 +57,13 @@ def linear_occupancy(nfr: np.ndarray, nuc: np.ndarray, nfr_ratio: int):
     This function does not add a pseudocount, so if used outside the main script
     it can cointain NaNs in the output.
     """
-    occ = (nfr * nfr_ratio) / (nfr + nuc)
+    nfr_w = rolling_window(nfr, opts.window_size)
+    nuc_w = rolling_window(nuc, opts.window_size)
+    
+    occ = (nfr_w * opts.nfr_ratio + opts.pseudocount_nuc) / (nfr_w + nuc_w + opts.pseudocount)
 
     # corrected values can't exceed 1
     return occ.clip(max=1)
-
-def mixture_occupancy(nfr: np.ndarray, nuc: np.ndarray, p_short: list[int]):
-
-    m = 1 / (p_short[1] - p_short[0])
-    c = - (p_short[0] * m)
-
-    occ = c + m * (nfr / (nfr + nuc))
-
-    # occupancy is between 1 and zero
-    return occ.clip(min=0, max=1)
 
 
 def smooth(x: np.ndarray, gaussian, gaussian_norm):
@@ -141,30 +134,25 @@ class Occupancy:
     def from_binned_fragments(cls, fragments: BinnedFragments, opts: Options=None):
         opts = get_options(fragments.opts, opts)
 
-        nfr_windows = rolling_window(fragments.nfr, opts.window_size)
-        nuc_windows = rolling_window(fragments.nuc + opts.pseudocount, opts.window_size)
+        occ = occupancy(fragments.nfr, fragments.nuc, opts)
 
-        if opts.method == "linear":
-            raw_occ = linear_occupancy(nfr_windows, nuc_windows, opts.nfr_ratio)
-        elif opts.method == "mixture":
-            raw_occ = mixture_occupancy(nfr_windows, nuc_windows, opts.p_short)
-
-        smoothed = smooth(raw_occ, opts.gaussian, opts.gaussian_norm)
+        if opts.smooth:
+            occ = smooth(occ, opts.gaussian, opts.gaussian_norm)
+        else:
+            occ = occ[opts.shift:-opts.shift]
 
         s2 = opts.shift * 2
 
-        shift_bp = s2 * opts.bin_size
-
         r = replace(
-            fragments.range.extend(-shift_bp),
-            score = np.max(smoothed)
+            fragments.range.extend(-s2 * opts.bin_size),
+            score = np.max(occ)
         )
 
         return cls(
             r,
             fragments.nfr[s2:-s2],
             fragments.nuc[s2:-s2],
-            smoothed,
+            occ,
             opts,
         )
     

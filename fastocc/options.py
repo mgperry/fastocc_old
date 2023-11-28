@@ -21,17 +21,19 @@ class Options:
     changing these numbers is untested, there may be subtle bugs (particularly around
     windowing calculations).
     """
-    window_size: int = 11 # number of bins for window estimation
+    window_size: int = 5 # number of bins for window estimation
     bin_size: int = 10 # width of bins
     extend: int = 500 # base pairs to extend input ranges
     merge: int = 200 # merge input ranges closer than this (after extension)
-    max_insert: int = 1000
-    gaussian_sd: float = 2.
+    max_insert: int = 300
+    smooth: bool = True
+    gaussian_sd: float = 1.5
     nfr_cutoff: int = 119 # threshold above which reads are considered to come from nucleosomes
-    nfr_ratio: float = 1.22 # ratio of overall NFR reads to reads < nfr_cutoff
+    nfr_ratio: float = 2 # ratio of overall NFR reads to reads < nfr_cutoff
     method: str = "linear"
     p_short: tuple[float] = (0.2, 0.95)
-    pseudocount: int = 1 # can be float probably
+    pseudocount: int = 10 # can be float probably
+    pseudocount_nuc: int = 1
     nfr_threshold: float = 0.6
     shift_atac: bool = True
     filter_duplicates: bool = True
