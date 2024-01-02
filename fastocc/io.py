@@ -1,23 +1,27 @@
 import csv
 import sys
 
+import numpy as np
+
 import pyBigWig
 
 from .range import Range
+from .occupancy import Occupancy
 
 
 class BigWigWriter:
-    def __init__(self, f: str, header: dict[str, int]):
-         self.file = pyBigWig.open(f, 'w')
-         self.file.addHeader(list(header.items()))
+    def __init__(self, f: str, chrom_info: dict[str, int], bin_size=10):
+         self.file = pyBigWig.open(str(f), 'w')
+         self.file.addHeader(list(chrom_info.items()))
+         self.bin_size = bin_size
 
-    def write(self, occ):
+    def write(self, r: Range, data: np.ndarray | list[float]):
         self.file.addEntries(
-            occ.range.chr,
-            occ.range.start-1,
-            values=occ.data["occ"].values.tolist(),
-            span=occ.options.bin_size,
-            step=occ.options.bin_size,
+            r.chr,
+            r.start-1,
+            values=data,
+            span=self.bin_size,
+            step=self.bin_size,
         )
 
 
@@ -32,7 +36,7 @@ class BedGraphWriter:
 
         self.fh.write("\t".join(self.header) + "\n")
 
-    def write(self, occ):
+    def write(self, occ: Occupancy):
         occ.to_data_frame().to_csv(
             self.fh,
             sep="\t",

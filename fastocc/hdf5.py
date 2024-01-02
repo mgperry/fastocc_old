@@ -7,6 +7,8 @@ from pathlib import Path
 
 from .options import Options
 from .range import Range
+from .io import BigWigWriter
+
 
 def count_bins(r: Range, size):
     return (r.end - r.start + 1) // size
@@ -33,9 +35,13 @@ class HDF5Writer:
         meta.create_group("schema")
         meta["schema"].attrs.update(schema)
 
+
+        meta.create_group("opts")
+
         if opts:
-            meta.create_group("opts")
             meta["opts"].attrs.update(asdict(opts))
+
+        if "bin_size" in opts:
             self.bin_size = opts.bin_size
         else:
             bin_size = schema.get("bin_size", None)
@@ -43,6 +49,7 @@ class HDF5Writer:
             if not bin_size:
                 raise ValueError("bin_size must be given in opts or schema")
 
+            meta["opts"].attrs.update({"bin_size": bin_size})
             self.bin_size = bin_size
 
         if genome_info:
@@ -197,3 +204,11 @@ class HDF5Loader:
                 yield data
 
             start = end
+
+    def export_bigwig(self, bw, track):
+        bigwig = BigWigWriter(bw, self.chrom_info, self.opts.bin_size)
+
+        for r in self:
+            bigwig.write(r["range"], r[track].astype(np.float32))
+
+        bigwig.file.close()

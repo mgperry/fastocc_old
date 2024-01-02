@@ -19,7 +19,7 @@ def fastocc():
 @click.option("--bam", help="BAM file containing ATAC-seq reads", required=True, type=str)
 @click.option("--bed", help="BED file containing ranges.", type=str)
 @click.option("-o", "--output", help="Output file location (defaults to stdout).", type=str, default="-")
-@click.option("--format", help="Output file format.", type=click.Choice(["bedgraph", "bigwig"]), default="bedgraph")
+# @click.option("--format", help="Output file format.", type=click.Choice(["bedgraph", "bigwig"]), default="bedgraph")
 @click.option("--pseudocount", help="Pseudocount added to NUC reads (number is for each 10bp bin)", type=float, default=1)
 def occ(bam: str, bed: str, output: str, format: str, pseudocount: float):
     if not pseudocount > 0:
@@ -32,10 +32,10 @@ def occ(bam: str, bed: str, output: str, format: str, pseudocount: float):
 
     fragments = BamFragments.load(bam, bed, opts)
 
-    if format == "bigwig":
-        writer = BigWigWriter(output, header=fragments.chrom_info)
-    else:
-        writer = BedGraphWriter(output)
+    # if format == "bigwig":
+    #     writer = BigWigWriter(output, header=fragments.chrom_info)
+    # else:
+    writer = BedGraphWriter(output)
     
     for frags in fragments:
         occupancy = Occupancy.from_fragments(frags)
