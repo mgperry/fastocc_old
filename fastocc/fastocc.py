@@ -40,7 +40,6 @@ def call(bam: str, bed: str, output: str, options: str):
 @click.command
 @click.option("--fragments", help="HDF5 file containing `fastocc call` output.", required=True, type=str)
 @click.option("--output", help="Output file location.", type=str)
-# @click.option("--track", help="Track to call NFRs from.", type=str, default="occ")
 @click.option("--options", help="Option file location.", type=str)
 def nfr(fragments: str, output: str, options: str):
     if options:
@@ -62,7 +61,7 @@ def nfr(fragments: str, output: str, options: str):
 @click.command
 @click.option("--fragments", help="HDF5 file containing `fastocc call` output.", required=True, type=str)
 @click.option("--output", help="Output file location.", type=str)
-@click.option("--track", help="Track to call NFRs from.", type=str, default="occ")
+@click.option("--track", help="Track to export.", type=str, default="occ")
 def export(fragments: str, track: str, output: str):
     h5 = HDF5Loader.open(fragments)
 
