@@ -2,7 +2,7 @@ import click
 import csv
 
 from .occupancy import Occupancy
-from .options import Options
+from .options import Options, NucPosOptions
 from .bam import BamFragmentLoader
 from .hdf5 import HDF5Writer, HDF5Loader
 from .nfr import threshold
@@ -18,11 +18,17 @@ def fastocc():
 @click.option("--bed", help="BED file containing ranges.", type=str, required=True)
 @click.option("-o", "--output", help="Output file location.", type=str, required=True)
 @click.option("--options", help="Option file location.", type=str, default=None)
-def call(bam: str, bed: str, output: str, options: str):
-    if options:
-        opts = Options.load(options)
+@click.option("--nps", help="Calculate Nucleosome positions instead of NFRs", is_flag=True)
+def call(bam: str, bed: str, output: str, options: str, nps: bool):
+    if nps:
+        defaults = NucPosOptions
     else:
-        opts = Options()
+        defaults = Options
+
+    if options:
+        opts = defaults.load(options)
+    else:
+        opts = defaults()
 
     fragments = BamFragmentLoader.open(bam, bed, opts)
 
