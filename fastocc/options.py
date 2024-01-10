@@ -9,10 +9,11 @@ from .np_utils import gaussian
 @dataclass
 class Options:
     """
-    These aren't meant to be changed after release (or by users), but instead to avoid
-    magic numbers and allow us to test alternatives if needed. Be aware that as it stands
-    changing these numbers is untested, there may be subtle bugs (particularly around
-    windowing calculations).
+    This dataclass facilitates passing around large numbers of somewhat-related params
+    to functions in fastocc. In general, you should set this once, when loading fragments,
+    and let these values cascade through the program. This avoids errors where, for 
+    example, longer reads are read in, but then not accounted for properly in windowing
+    functions.
     """
     # bins + windows
     window_size: int = 5 # number of bins for window estimation
@@ -48,19 +49,33 @@ class Options:
         return cls(**jsn)
 
 
+class NucPosOptions(Options):
+    """
+    Alternative options to visualise nucleosome positions rather than NFRs, using
+    larger windows, a lower NFR ratio, and much weaker regularization towards 0.5
+    (not zero).
+
+    The output is best visualised as -2*(occ-0.5), with 1 representing a well-positioned
+    nucleosome, -1 an NFR, and 0 no data (or a disordered/atypical region).
+    """
+    window_size: int = 11
+    nfr_ratio: float = 1.2
+    pseudocount: int = 2
+    pseudocount_nuc: int = 1
+    smooth: bool = True
+    gaussian_sd: float = 2
+
 
 def get_options(*args):
-    if not args:
-        return Options()
-    
+    """
+    Convenience function to avoid boilerplate for functions which take an Options
+    argument, and another argument which supplies its own opts (e.g. BinnedFragments).
+
+    The rightmost non-None argument is returned, or else default options are used.
+    """
     opts = [arg for arg in args if arg is not None]
 
     if len(opts) == 0:
         return Options()
-
-    if len(opts) == 1:
-        return opts[0]
-    
-    print("multiple options supplied, take care.")
 
     return copy(opts[-1])

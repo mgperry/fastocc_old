@@ -6,7 +6,7 @@ import pysam
 import numpy as np
 
 from .range import Range, BedFile
-from .options import get_options, Options
+from .options import Options, get_options
 from .fragments import FragmentLoader, Fragments
 
 
@@ -17,6 +17,8 @@ def load_fragments(reads: Iterator[pysam.AlignedRead], opts: Options) -> tuple[n
     length (size) of a fragment in a named tuple. By default, fragments with identical
     start/end coordinates are considered to be duplicates and filtered.
     """
+
+    opts = get_options(opts)
 
     start = []
     size = []
@@ -91,6 +93,8 @@ class Bam:
         """
         Capture all fragments less than opts.max_insert overlapping a given interval.
         """
+        opts = get_options(opts)
+
         reads = self.fetch(r.extend(opts.max_insert))
         start, size = load_fragments(reads, opts)
 
