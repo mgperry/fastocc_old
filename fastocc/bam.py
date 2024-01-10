@@ -1,5 +1,6 @@
 import sys
 from typing import Iterator
+from dataclasses import dataclass
 
 import pysam
 import numpy as np
@@ -9,23 +10,13 @@ from .options import get_options, Options
 from .fragments import FragmentLoader, Fragments
 
 
-def fetch_chrom_sizes(h: pysam.AlignmentHeader) -> dict[str, int]:
+def load_fragments(reads: Iterator[pysam.AlignedRead], opts: Options) -> tuple[np.ndarray,np.ndarray]:
     """
-    Extract chromosome sizes from BAM header (via pysam).
-
-    h["SQ"] => [{"SN": "chr1", "LN", 248956422}, ...]
-    output => {"chr1": 248956422, ...}
-    """
-    return {seq["SN"]: seq["LN"] for seq in h['SQ']}
-
-
-def process_bam_reads(reads, opts: Options) -> tuple[np.ndarray,np.ndarray]:
-    """
-    Reconstruct full-length ATAC-seq fragments from a bam file. Filters for the first
+    Reconstruct full-length ATAC-seq fragments from Bam reads. Filters for the first
     read of proper pairs, corrects the Tn5 insertion distance and returns the start and
-    length (size) of a fragment in a named tuple.
+    length (size) of a fragment in a named tuple. By default, fragments with identical
+    start/end coordinates are considered to be duplicates and filtered.
     """
-    # q = r.extend(self.opts.max_insert//2) # this is to capture long fragments
 
     start = []
     size = []
@@ -55,6 +46,16 @@ def process_bam_reads(reads, opts: Options) -> tuple[np.ndarray,np.ndarray]:
     return np.array(start, dtype=int), np.array(size, dtype=int)
 
 
+def fetch_chrom_sizes(h: pysam.AlignmentHeader) -> dict[str, int]:
+    """
+    Extract chromosome sizes from BAM header (via pysam).
+
+    h["SQ"] => [{"SN": "chr1", "LN", 248956422}, ...]
+    output => {"chr1": 248956422, ...}
+    """
+    return {seq["SN"]: seq["LN"] for seq in h['SQ']}
+
+
 class Bam:
     """
     Wrap pysam.AlignmentFile to make a few things easier.
@@ -71,7 +72,7 @@ class Bam:
         self.bam = bam
         self.chrom_info = fetch_chrom_sizes(bam.header)
 
-    def fetch(self, r: Range):
+    def fetch(self, r: Range) -> Iterator[pysam.AlignedRead]:
         """
         Wrap pysam so that extended ranges don't fail due to out-of-bounds
         """
@@ -81,35 +82,41 @@ class Bam:
             min(r.end, self.chrom_info[r.chr])
         )
     
+    def fragments(self, r: Range, opts: Options) -> Fragments:
+        """
+        Capture all fragments less than opts.max_insert overlapping a given interval.
+        """
+        reads = self.fetch(r.extend(opts.max_insert))
+        start, size = load_fragments(reads, opts)
+
+        return Fragments(
+            r,
+            start,
+            size,
+            opts
+        )
+    
     @classmethod
     def open(cls, bam_file: str, index=True):
         return cls(pysam.AlignmentFile(bam_file), index)
 
 
-class BamFragments(FragmentLoader):
-    def __init__(self, bam: Bam, ranges: Iterator[Range], opts: Options=None) -> None:
-        self.opts = get_options(opts)
-        self.ranges = ranges
-        self.bam = bam
+@dataclass
+class BamFragmentLoader(FragmentLoader):
+    bam: Bam
+    ranges: Iterator[Range]
+    opts: Options
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Fragments]:
         for r in self.ranges:
             r_ext = r.extend(2*self.opts.shift*self.opts.bin_size) # extend for windowing // smoothing
-            reads = self.bam.fetch(r_ext.extend(self.opts.max_insert//2)) # capture long fragments
-            start, size = process_bam_reads(reads, self.opts)
 
-            yield Fragments(
-                r_ext,
-                start,
-                size,
-                self.opts
-            )
+            yield self.bam.fragments(r_ext, self.opts)
     
     @classmethod
-    def load(cls, bam: str, bed: str, opts: Options, index=True):
+    def open(cls, bam: str, bed: str, opts: Options, index=True):
         bam_file = Bam.open(bam, index=index)
 
         ranges = BedFile.open(bed, bam_file.chrom_info, opts)
 
         return cls(bam_file, ranges, opts)
-

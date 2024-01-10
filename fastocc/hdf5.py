@@ -24,7 +24,7 @@ class HDF5Writer:
     chunks = 10000
     scaleoffset = 2 # decimal places for floats
 
-    def __init__(self, file: h5py.File, schema: dict, opts=None, genome_info=None):
+    def __init__(self, file: h5py.File, schema: dict, opts: Options=None, genome_info=None):
         self.file = file
         self.schema = schema
 
@@ -40,8 +40,6 @@ class HDF5Writer:
 
         if opts:
             meta["opts"].attrs.update(asdict(opts))
-
-        if "bin_size" in opts:
             self.bin_size = opts.bin_size
         else:
             bin_size = schema.get("bin_size", None)
