@@ -1,7 +1,7 @@
 from dataclasses import dataclass, replace, astuple
 from typing_extensions import Self
-import os
 from tempfile import NamedTemporaryFile
+from typing import Iterator
 
 from pybedtools import BedTool
 
@@ -35,9 +35,9 @@ class Range:
 
     def align(self, bin_size: int) -> Self:
         """
-        Return a window aligned to 10bp bins.
+        Return a window aligned to fixed-width bins.
 
-        e.g. chr2:54-89 => chr2:51-90
+        e.g. with 10bp bins: chr2:54-89 => chr2:51-90
         """
 
         s = (self.start - 1) // bin_size * bin_size + 1
@@ -47,7 +47,7 @@ class Range:
 
     def make_bins(self, bin_size: int) -> list[Self]:
         """
-        Return a list of Ranges representing bins.
+        Return a list of Ranges representing individual bins.
 
         NB These are aligned to a genomic 'grid' based on bin_size
         e.g. make_bins(chr2:54-84) => [Range(chr2, 51, 60), ..., Range(chr2, 81, 90)]
@@ -67,9 +67,15 @@ class Range:
     def __len__(self) -> int:
         """
         Return the number of base pairs included in the range. Behaviour is similar to
-        GRanges, so an interval "chr1:25-25" has length 1.
+        GRanges, so the interval "chr1:31-40" has length 10, "chr1:25-25" has length 1.
         """
         return self.end - self.start + 1
+    
+    def coords(self) -> str:
+        """
+        String epresentation of range coordinates e.g. "chr1:53-70"
+        """
+        return f"{self.chr}:{self.start}-{self.end}"
 
 
 def write_chrom_sizes(chrom_sizes: dict[str, int], f):
@@ -86,17 +92,20 @@ def write_chrom_sizes(chrom_sizes: dict[str, int], f):
 @dataclass
 class BedFile:
     """
-    Class to represent a list of ranges as a BED file on disk, saving memory, and also
-    making sure the file is sorted and non-overlapping, and align the ranges to
-    genomic bins.
+    Dataclass wrapping `pybedtools.BedTool`, iterating over the class will yield
+    Range instances (with the correct start coordinate).
+    
+    A constructor from a bed file is provided to ensure ranges are extended, sorted and 
+    non-overlapping, and aligned to genomic bins, based on parameters provided in
+    Options. This requires chromosome information as well.
 
-    Uses of this class should also accept any object that will give Ranges when iterated
-    over.
+    BedFile should be possible to replace with any classes which provides an iterator
+    over ranges.
     """
     bed: BedTool
     opts: Options=None
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Range]:
         for i in self.bed:
             score = i.score if i.score != "." else 0
             r = Range(i.chrom, i.start+1, i.end, i.name, score, i.strand)

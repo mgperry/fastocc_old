@@ -17,9 +17,9 @@ def threshold(occ: Occupancy, th=0.6, th_min=0.8) -> Iterator[Range]:
     i = 0
 
     for start, stop in coords:
-        name = f"{r.chr}:{r.start}-{r.end}" if r.name == "." else r.name
+        name = r.coords() if r.name == "." else r.name
 
-        th_max = np.sum(occ.occ[start:stop])
+        th_max = np.max(occ.occ[start:stop])
 
         if not th_max > th_min:
             continue

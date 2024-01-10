@@ -28,6 +28,10 @@ def occupancy(nfr: np.ndarray, nuc: np.ndarray, opts: Options):
 
 @dataclass
 class Occupancy:
+    """
+    Dataclass containing occupancy caclculated in a given genomic interval. Binned
+    fragment counts are also stored for convenience.
+    """
     range: Range
     nfr: np.ndarray
     nuc: np.ndarray

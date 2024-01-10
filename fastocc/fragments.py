@@ -11,7 +11,7 @@ from .options import Options, get_options
 @dataclass
 class Fragments:
     """
-    Class to represent raw ATAC fragments from a single genomic interval.
+    Dataclass containing raw ATAC fragments from a single genomic interval.
     """
     range: Range
     start: np.ndarray
@@ -36,6 +36,15 @@ class Fragments:
 
 @dataclass
 class BinnedFragments:
+    """
+    Dataclass containing binned ATAC fragments within a range.
+ 
+    Fragments are sorted into fixed bins (default 10bp) based on their midpoints,
+    and classified based on insertion length (insertions less than 120 are 
+    nucleosome-free by default). The insertion length is capped (default 300bp),
+    since these fragments are less informative.
+    """
+
     range: Range
     nfr: np.ndarray
     nuc: np.ndarray
@@ -43,12 +52,6 @@ class BinnedFragments:
 
     @classmethod
     def from_fragments(cls, frags: Fragments, opts: Options=None):
-        """
-        Sort ATAC-seq fragments into fixed bins (default 10bp) based on their midpoints,
-        and classify them based on insertion length (insertions less than 120 are 
-        nucleosome-free. The insertion length is capped at 300bp by default, since these
-        fragments are less informative.
-        """
         opts = get_options(frags.opts, opts)
 
         if not frags.range.align(opts.bin_size) == frags.range:

@@ -58,7 +58,12 @@ def fetch_chrom_sizes(h: pysam.AlignmentHeader) -> dict[str, int]:
 
 class Bam:
     """
-    Wrap pysam.AlignmentFile to make a few things easier.
+    Wrapper around pysam.AlignmentFile to return full-length ATAC-seq fragments
+    rather than individual reads.
+
+    Also loads genome info and checks bounds on queries.
+
+    NB By default, Bam files are indexed if there is none present.
     """
     def __init__(self, bam: pysam.AlignmentFile, index=True):
         if index and not bam.has_index():
@@ -103,6 +108,13 @@ class Bam:
 
 @dataclass
 class BamFragmentLoader(FragmentLoader):
+    """
+    Dataclass containing a Bam file and a associated set of ranges, providing an 
+    iterator of ATAC-seq fragments at each range.
+
+    `open` method handles creation of a BamFragmentLoader from filenames, automatically
+    extracting genome info and passing this to BedFile.
+    """
     bam: Bam
     ranges: Iterator[Range]
     opts: Options
