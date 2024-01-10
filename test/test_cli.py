@@ -45,12 +45,24 @@ class TestCli:
         assert os.path.exists("test_occ.bw")
         assert result.exit_code == 0
 
+
 def test_fastocc_nps():
     if os.path.exists("test.h5wig"):
         os.remove("test.h5wig")
 
     runner = CliRunner()
     result = runner.invoke(fastocc, ["call", "--bed", "test.bed", "--bam", "test.bam", "--output", "test.h5wig", "--nps"])
+
+    assert os.path.exists("test.h5wig")
+    assert result.exit_code == 0
+
+
+def test_fastocc_opts():
+    if os.path.exists("test.h5wig"):
+        os.remove("test.h5wig")
+
+    runner = CliRunner()
+    result = runner.invoke(fastocc, ["call", "--bed", "test.bed", "--bam", "test.bam", "--output", "test.h5wig", "--options", "test_opts.json"])
 
     assert os.path.exists("test.h5wig")
     assert result.exit_code == 0

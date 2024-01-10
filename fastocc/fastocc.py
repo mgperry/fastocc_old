@@ -1,5 +1,6 @@
 import click
 import csv
+import os
 
 from .occupancy import Occupancy
 from .options import Options, NucPosOptions
@@ -29,6 +30,9 @@ def call(bam: str, bed: str, output: str, options: str, nps: bool):
         opts = defaults.load(options)
     else:
         opts = defaults()
+
+    if os.path.exists(output):
+        IOError(f"Output {output} already exists.")
 
     fragments = BamFragmentLoader.open(bam, bed, opts)
 
